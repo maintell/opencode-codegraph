@@ -368,7 +368,10 @@ fn install_round_trip_file_url() {
     let commit = try_install(&url, target_root.path()).unwrap();
     assert!(!commit.is_empty(), "expected non-empty source commit");
 
-    let installed = target_root.path().join(".code-graph").join("index.db");
+    let installed = target_root
+        .path()
+        .join(crate::domain::CODE_GRAPH_DIR)
+        .join("index.db");
     assert!(
         installed.exists(),
         "expected installed at {}",
@@ -383,7 +386,7 @@ fn install_round_trip_file_url() {
     assert!(fetched.is_some(), "fetched_at should be written");
 
     // No leftover .partial files
-    let entries: Vec<_> = std::fs::read_dir(target_root.path().join(".code-graph"))
+    let entries: Vec<_> = std::fs::read_dir(target_root.path().join(crate::domain::CODE_GRAPH_DIR))
         .unwrap()
         .flatten()
         .collect();
@@ -426,7 +429,7 @@ fn install_rejects_corrupt_archive() {
     );
 
     // Clean state — no index.db, no .partial
-    let cg_dir = target_root.path().join(".code-graph");
+    let cg_dir = target_root.path().join(crate::domain::CODE_GRAPH_DIR);
     if cg_dir.exists() {
         for entry in std::fs::read_dir(&cg_dir).unwrap().flatten() {
             let s = entry.file_name().to_string_lossy().into_owned();
@@ -916,7 +919,7 @@ fn install_clears_a_stranded_destination_wal() {
         .current_dir(target_root.path())
         .status()
         .unwrap();
-    let cg = target_root.path().join(".code-graph");
+    let cg = target_root.path().join(crate::domain::CODE_GRAPH_DIR);
     std::fs::create_dir_all(&cg).unwrap();
     let dest = cg.join("index.db");
     let stale_key = strand_a_wal_beside(&dest);

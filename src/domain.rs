@@ -3,7 +3,10 @@
 // live here to avoid layer violations (e.g., parser importing from storage).
 
 // -- Data directory --
-pub const CODE_GRAPH_DIR: &str = ".code-graph";
+pub const CODE_GRAPH_DIR: &str = ".codegraph";
+/// Pre-rename data dir. Read-only legacy fallback: reads route here when no
+/// new-dir DB exists; no write path may create or modify anything under it.
+pub const LEGACY_CODE_GRAPH_DIR: &str = ".code-graph";
 
 // -- JSON-RPC 2.0 standard error codes --
 // Canonical here, re-exported from `mcp::protocol` (same shape as the relation

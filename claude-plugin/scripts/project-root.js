@@ -58,7 +58,8 @@ function worktreeMainRoot(dir) {
 function resolveProjectRoot(startDir, opts = {}) {
   const home = opts.home !== undefined ? opts.home : os.homedir();
   const exists = opts.exists || fs.existsSync;
-  const hasIndex = (d) => exists(path.join(d, '.code-graph', 'index.db'));
+  const hasIndex = (d) =>
+    exists(path.join(d, '.codegraph', 'index.db')) || exists(path.join(d, '.code-graph', 'index.db'));
   const hasGit = (d) => exists(path.join(d, '.git'));
   const start = path.resolve(startDir || '.');
 

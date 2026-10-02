@@ -4763,7 +4763,7 @@ fn test_cli_stats_sigpipe_graceful() {
         ));
     }
     line.push_str("}}\n");
-    let cg = project.path().join(".code-graph");
+    let cg = project.path().join(".codegraph");
     std::fs::create_dir_all(&cg).unwrap();
     std::fs::write(cg.join("usage.jsonl"), &line).unwrap();
 
@@ -5367,7 +5367,7 @@ fn test_cli_a_symbol_in_a_new_file_is_found_by_every_lookup() {
     let project = fresh_project();
     run_cli(&project, &["show", "brandNewFn"]);
     let db = code_graph_mcp::storage::db::Database::open(
-        &project.path().join(".code-graph").join("index.db"),
+        &project.path().join(".codegraph").join("index.db"),
     )
     .unwrap();
     let indexed = |p: &str| {
@@ -7228,7 +7228,7 @@ fn test_cli_incremental_index_gitignore_opt_out() {
     let content =
         std::fs::read_to_string(&gitignore).expect("control run must write .git/info/exclude");
     assert!(
-        content.contains(".code-graph/"),
+        content.contains(".codegraph/"),
         "control run should add the entry; got: {content:?}"
     );
 }
@@ -9799,7 +9799,7 @@ fn test_cli_incremental_index_gitignores_the_index_dir() {
     assert!(
         content
             .lines()
-            .any(|l| l.trim().trim_end_matches('/') == ".code-graph"),
+            .any(|l| l.trim().trim_end_matches('/') == ".codegraph"),
         "the index dir must be ignored; got: {content:?}"
     );
 

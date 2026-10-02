@@ -154,7 +154,7 @@ fn bench_node_count_parity_full_vs_snapshot() {
         .status()
         .unwrap();
     snapshot::try_install(&format!("file://{}", zst.display()), target.path()).unwrap();
-    let nodes_snap = count_nodes(&target.path().join(".code-graph").join("index.db"));
+    let nodes_snap = count_nodes(&target.path().join(".codegraph").join("index.db"));
 
     println!("nodes full={nodes_full} snapshot={nodes_snap}");
     assert_eq!(

@@ -442,10 +442,10 @@ test('the corrupt-index payload the BINARY emits is routed, not rejected', () =>
     healthy: false,
     reason: 'corrupt',
     schema_version: null,
-    issue: 'index database is corrupt: file is not a database (/p/.code-graph/index.db). '
+    issue: 'index database is corrupt: file is not a database (/p/.codegraph/index.db). '
       + 'The index is a rebuildable cache — run: code-graph-mcp rebuild-index --confirm',
     integrity: {
-      quick_check: 'index database is corrupt: file is not a database (/p/.code-graph/index.db).',
+      quick_check: 'index database is corrupt: file is not a database (/p/.codegraph/index.db).',
       fts_drift: null,
       orphan_vectors: null,
     },

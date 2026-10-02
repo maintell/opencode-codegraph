@@ -10782,10 +10782,15 @@ fn test_js_renamed_import_sweep_binds_no_self_call() {
     );
 }
 
-// ── F1: `.code-graph/source-roots.json` (tasks/specs/grep-hook-source-roots.md) ──
+// ── F1: `.codegraph/source-roots.json` (tasks/specs/grep-hook-source-roots.md) ──
 
 fn read_source_roots(project: &std::path::Path) -> Option<Vec<String>> {
-    let raw = fs::read_to_string(project.join(".code-graph").join(SOURCE_ROOTS_FILE)).ok()?;
+    let raw = fs::read_to_string(
+        project
+            .join(crate::domain::CODE_GRAPH_DIR)
+            .join(SOURCE_ROOTS_FILE),
+    )
+    .ok()?;
     let v: serde_json::Value = serde_json::from_str(&raw).unwrap();
     assert_eq!(v["version"], 1);
     Some(
@@ -10818,14 +10823,20 @@ fn source_roots_project() -> TempDir {
         fs::create_dir_all(p.join(path).parent().unwrap()).unwrap();
         fs::write(p.join(path), body).unwrap();
     }
-    fs::create_dir_all(p.join(".code-graph")).unwrap();
+    fs::create_dir_all(p.join(crate::domain::CODE_GRAPH_DIR)).unwrap();
     project
 }
 
 #[test]
 fn full_index_lists_top_level_dirs_that_hold_indexed_code() {
     let project = source_roots_project();
-    let db = Database::open(&project.path().join(".code-graph/index.db")).unwrap();
+    let db = Database::open(
+        &project
+            .path()
+            .join(crate::domain::CODE_GRAPH_DIR)
+            .join("index.db"),
+    )
+    .unwrap();
     run_full_index(&db, project.path(), None, None).unwrap();
     assert_eq!(
         read_source_roots(project.path()).expect("source-roots.json written"),
@@ -10838,7 +10849,7 @@ fn full_index_lists_top_level_dirs_that_hold_indexed_code() {
 fn incremental_index_keeps_source_roots_current_with_the_files_table() {
     let project = source_roots_project();
     let p = project.path();
-    let db = Database::open(&p.join(".code-graph/index.db")).unwrap();
+    let db = Database::open(&p.join(crate::domain::CODE_GRAPH_DIR).join("index.db")).unwrap();
     run_full_index(&db, p, None, None).unwrap();
 
     fs::create_dir_all(p.join("benchmarks")).unwrap();
@@ -10853,8 +10864,14 @@ fn incremental_index_keeps_source_roots_current_with_the_files_table() {
 
     // Parity: a from-scratch full index of the same tree lists the same roots.
     let fresh = TempDir::new().unwrap();
-    fs::create_dir_all(fresh.path().join(".code-graph")).unwrap();
-    let fresh_db = Database::open(&fresh.path().join(".code-graph/index.db")).unwrap();
+    fs::create_dir_all(fresh.path().join(crate::domain::CODE_GRAPH_DIR)).unwrap();
+    let fresh_db = Database::open(
+        &fresh
+            .path()
+            .join(crate::domain::CODE_GRAPH_DIR)
+            .join("index.db"),
+    )
+    .unwrap();
     // Same files, different root.
     for rel in [
         "benchmarks/bench.py",

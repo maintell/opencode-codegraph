@@ -1,5 +1,41 @@
 use super::*;
 
+/// Read-side DB routing: `<root>/.codegraph/index.db` when it exists OR when
+/// no legacy DB exists; else the legacy `<root>/.code-graph/index.db`.
+/// Pure read-routing, creates nothing.
+pub fn index_db_path(project_root: &Path) -> PathBuf {
+    let new = project_root.join(CODE_GRAPH_DIR).join("index.db");
+    if new.exists() {
+        return new;
+    }
+    let legacy = project_root
+        .join(crate::domain::LEGACY_CODE_GRAPH_DIR)
+        .join("index.db");
+    if legacy.exists() {
+        return legacy;
+    }
+    new
+}
+
+/// Write-side data dir: always `<root>/.codegraph`. Only write paths use it.
+pub fn code_graph_dir_for_write(project_root: &Path) -> PathBuf {
+    project_root.join(CODE_GRAPH_DIR)
+}
+
+/// True when either the new or the legacy data dir holds an `index.db`.
+pub fn has_any_index_db(project_root: &Path) -> bool {
+    index_db_path(project_root).exists()
+}
+
+/// True when the path names an index inside the legacy (read-only) dir.
+pub(crate) fn is_legacy_db_path(db_path: &Path) -> bool {
+    db_path
+        .parent()
+        .and_then(|d| d.file_name())
+        .and_then(|n| n.to_str())
+        == Some(crate::domain::LEGACY_CODE_GRAPH_DIR)
+}
+
 /// Resolve the project root from an explicit `cwd`. Mirrors the JS
 /// `resolveProjectRoot` (`claude-plugin/scripts/project-root.js`); keep the two
 /// in lock-step (see `feedback_hook_class_bug_sweep`).
@@ -27,11 +63,13 @@ pub(crate) fn resolve_project_root_bounded(cwd: &Path, home: Option<&Path>) -> P
     if cwd.join(".git").exists() {
         return cwd.to_path_buf();
     }
-    let cwd_has_index = cwd.join(CODE_GRAPH_DIR).join("index.db").exists();
+    let cwd_has_index = has_any_index_db(cwd);
 
     // Walk STRICT ancestors, stopping AT `$HOME` (exclusive) or the nearest
     // `.git` root. Track the nearest indexed ancestor (the canonical root of an
     // already-indexed project) and the nearest `.git` root within that bound.
+    // Both the new dir and the legacy dir count as "indexed"; a new-dir index
+    // wins ties at the same ancestor.
     let mut nearest_indexed: Option<PathBuf> = None;
     let mut git_root_indexed: Option<PathBuf> = None;
     let mut nearest_git: Option<PathBuf> = None;
@@ -40,7 +78,12 @@ pub(crate) fn resolve_project_root_bounded(cwd: &Path, home: Option<&Path>) -> P
         if home == Some(c) {
             break; // an index/.git at-or-above home is an unrelated outer project
         }
-        let c_indexed = c.join(CODE_GRAPH_DIR).join("index.db").exists();
+        let c_new = c.join(CODE_GRAPH_DIR).join("index.db").exists();
+        let c_old = c
+            .join(crate::domain::LEGACY_CODE_GRAPH_DIR)
+            .join("index.db")
+            .exists();
+        let c_indexed = c_new || c_old;
         if nearest_indexed.is_none() && c_indexed {
             nearest_indexed = Some(c.to_path_buf());
         }
@@ -123,15 +166,16 @@ pub(crate) fn worktree_main_root(root: &Path) -> Option<PathBuf> {
 }
 
 /// Read-side effective root (D#106): the given root when its index exists
-/// (own index always wins); else, for a linked worktree whose MAIN checkout
-/// is indexed, the main checkout root; else the given root unchanged (the
-/// caller's "No index found" path fires with the original location).
+/// (own index always wins — either the new dir or the legacy dir); else, for
+/// a linked worktree whose MAIN checkout is indexed (new first, then legacy),
+/// the main checkout root; else the given root unchanged (the caller's
+/// "No index found" path fires with the original location).
 pub(crate) fn effective_read_root(project_root: &Path) -> PathBuf {
-    if project_root.join(CODE_GRAPH_DIR).join("index.db").exists() {
+    if has_any_index_db(project_root) {
         return project_root.to_path_buf();
     }
     if let Some(main) = worktree_main_root(project_root) {
-        if main.join(CODE_GRAPH_DIR).join("index.db").exists() {
+        if has_any_index_db(&main) {
             return main;
         }
     }

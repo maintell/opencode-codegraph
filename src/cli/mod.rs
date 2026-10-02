@@ -127,7 +127,7 @@ fn levenshtein_small(a: &str, b: &str) -> usize {
 
 /// Minimal JSON-RPC loop that answers `initialize` / `tools/list` with an empty
 /// catalog and rejects everything else, WITHOUT opening a database, loading the
-/// embedding model, or creating `.code-graph/`. Mirrors the JS launcher's
+/// embedding model, or creating `.codegraph/`. Mirrors the JS launcher's
 /// `serveEmptyMcpStub`. Driven by `run_serve` when `is_non_project_cwd` holds
 /// and `CODE_GRAPH_FORCE_PLUGIN_MCP` is unset.
 pub fn serve_non_project_stub<R: BufRead, W: Write>(
@@ -240,8 +240,11 @@ impl CliContext {
         // (index/serve/rebuild) does not go through CliContext and still builds
         // a local index. Paths/line numbers in answers are the main checkout's,
         // same contract as the JS hooks/statusline side.
+        //
+        // Legacy `.code-graph/` DBs stay readable here; reads never migrate
+        // (migration is the index write path's job).
         let project_root = &effective_read_root(project_root);
-        let db_path = project_root.join(CODE_GRAPH_DIR).join("index.db");
+        let db_path = index_db_path(project_root);
         if !db_path.exists() {
             anyhow::bail!(
                 "No index found at {}. Run: code-graph-mcp incremental-index",
@@ -268,7 +271,7 @@ impl CliContext {
     pub fn try_open(project_root: &Path) -> Option<Self> {
         // Same read-side worktree fallback as open() above.
         let project_root = &effective_read_root(project_root);
-        let db_path = project_root.join(CODE_GRAPH_DIR).join("index.db");
+        let db_path = index_db_path(project_root);
         if !db_path.exists() {
             return None;
         }

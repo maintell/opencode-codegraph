@@ -236,9 +236,7 @@ pub fn cmd_health_check_opts(project_root: &Path, format: &str, deep: bool) -> R
         // formats, opposite verdicts, and doctor.js consumes the JSON one, so
         // every worktree showed a phantom broken install (audit 2026-08-02
         // MED-3).
-        let db_path = effective_read_root(project_root)
-            .join(CODE_GRAPH_DIR)
-            .join("index.db");
+        let db_path = index_db_path(&effective_read_root(project_root));
         if !db_path.exists() {
             let payload = serde_json::json!({
                 "healthy": false,

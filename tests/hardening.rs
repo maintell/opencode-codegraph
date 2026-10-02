@@ -661,7 +661,7 @@ fn forbidden_edge_detector_actually_fires() {
     assert!(!references_module("use crate::clippy_helper::x;", "cli"));
 }
 
-/// Give `dir` a `.code-graph/index.db` (mirrors the private helper in
+/// Give `dir` a `.codegraph/index.db` (mirrors the private helper in
 /// `src/cli.rs`'s own unit tests — duplicated here since that one is
 /// `#[cfg(test)]`-private to the crate, not reachable from an integration test).
 fn write_index(dir: &std::path::Path) {
@@ -674,10 +674,10 @@ fn write_index(dir: &std::path::Path) {
 /// JS (`resolveProjectRoot`, claude-plugin/scripts/project-root.js) project-root
 /// resolvers are parallel implementations that MUST agree (M7 fix, v0.94.0).
 /// This locks the specific case that split-brained before M7: cwd sits under a
-/// STRAY nested `.code-graph` index (a monorepo-subdir relic) that is itself
+/// STRAY nested `.codegraph` index (a monorepo-subdir relic) that is itself
 /// below the real git root, which is also indexed. Both resolvers must pick the
 /// git root, not the nearer stray index — otherwise the CLI and the JS hooks
-/// read different `.code-graph` DBs for the same project.
+/// read different `.codegraph` DBs for the same project.
 ///
 /// JS invocation contract (confirmed by reading project-root.js in full plus its
 /// consumer test `claude-plugin/scripts/pre-grep-guide.test.js`): the file has NO
@@ -3142,7 +3142,7 @@ fn js_test_suite_leaves_the_shared_tmp_dir_intact() {
     // hypothetical: `--test-concurrency` requires Node >= 20.10, so every older
     // node takes exactly that path, on the flag added right below.
     // The one axis the sandbox does NOT cover is cwd: `current_dir(root)` is the
-    // repository, so `.code-graph/index.db` is reachable, and `doctor.test.js`,
+    // repository, so `.codegraph/index.db` is reachable, and `doctor.test.js`,
     // `hook-fire.test.js` and `lifecycle.e2e.test.js` each touch its `-shm`/`-wal`
     // sidecars. Measured as a READ — index.db's sha256, `user_version` and
     // `COUNT(*) FROM nodes` are unchanged across a full run; opening a WAL

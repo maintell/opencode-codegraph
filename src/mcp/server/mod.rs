@@ -3527,7 +3527,11 @@ function handleLogin(req: Request) {
 
         let _server = McpServer::from_project_root(project_dir.path()).unwrap();
 
-        assert!(project_dir.path().join(".code-graph/index.db").exists());
+        assert!(project_dir
+            .path()
+            .join(crate::domain::CODE_GRAPH_DIR)
+            .join("index.db")
+            .exists());
         // Not a git repo: the ignore rule has nowhere to go, and the tracked
         // .gitignore is never touched (decision D3).
         let gitignore = std::fs::read_to_string(project_dir.path().join(".gitignore")).unwrap();
@@ -5998,7 +6002,7 @@ app.post('/api/login', handleLogin);
         let zst_path = source.path().join("snap.db.zst");
         std::fs::write(&zst_path, &compressed).unwrap();
 
-        // Consumer project: same files, but fresh .code-graph/ directory (no prior index).
+        // Consumer project: same files, but fresh data dir (no prior index).
         // Install the snapshot into the consumer BEFORE calling from_project_root — this
         // is what maybe_install_snapshot does in production when index.db does not exist.
         let consumer = TempDir::new().unwrap();
@@ -6011,7 +6015,10 @@ app.post('/api/login', handleLogin);
         crate::snapshot::try_install(&url, consumer.path()).unwrap();
 
         // Verify snapshot was installed.
-        let index_db = consumer.path().join(".code-graph").join("index.db");
+        let index_db = consumer
+            .path()
+            .join(crate::domain::CODE_GRAPH_DIR)
+            .join("index.db");
         assert!(
             index_db.exists(),
             "snapshot must be installed before from_project_root"

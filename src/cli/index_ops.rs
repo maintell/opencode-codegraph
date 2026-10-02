@@ -59,7 +59,7 @@ pub(crate) fn wrap_index_busy<T>(r: Result<T>) -> Result<T> {
         let msg = format!("{:#}", e);
         if msg.contains("database is locked") || msg.contains("Error code 5") {
             anyhow::anyhow!(
-                "Another `code-graph-mcp` process is writing to .code-graph/index.db \
+                "Another `code-graph-mcp` process is writing to .codegraph/index.db \
                  (an indexer or MCP server). Wait for it to finish, then retry. \
                  Original error: {}",
                 e
@@ -378,6 +378,45 @@ pub(crate) fn lock_index_for_replace(
     }
 }
 
+/// One-shot legacy → new data-dir migration: when the new `index.db` is
+/// absent and the legacy `<root>/.code-graph/index.db` exists, copy the main
+/// file (only it — stale `-wal`/`-shm` are dropped on both sides first,
+/// best-effort) into a fresh new dir and return `true`.
+///
+/// Fail-open: ANY failure returns `Ok(false)` and the caller falls through to
+/// a full index. Never deletes or modifies the legacy dir.
+pub fn maybe_migrate_legacy_dir(project_root: &Path) -> Result<bool> {
+    let new_db = code_graph_dir_for_write(project_root).join("index.db");
+    if new_db.exists() {
+        return Ok(false);
+    }
+    let legacy_db = project_root
+        .join(crate::domain::LEGACY_CODE_GRAPH_DIR)
+        .join("index.db");
+    if !legacy_db.exists() {
+        return Ok(false);
+    }
+    // Best-effort stale-sidecar drop on both sides: a copied `-wal` replayed
+    // onto the copy would resurrect pre-copy pages; a stale one beside the
+    // source would be replayed onto the SOURCE on next open.
+    let drop_sidecars = |db: &Path| {
+        for suffix in ["-wal", "-shm"] {
+            let mut s = db.as_os_str().to_os_string();
+            s.push(suffix);
+            let _ = std::fs::remove_file(std::path::PathBuf::from(s));
+        }
+    };
+    drop_sidecars(&legacy_db);
+    drop_sidecars(&new_db);
+    if crate::utils::owned::ensure_owned_dir(&code_graph_dir_for_write(project_root)).is_err() {
+        return Ok(false);
+    }
+    match std::fs::copy(&legacy_db, &new_db) {
+        Ok(_) => Ok(true),
+        Err(_) => Ok(false),
+    }
+}
+
 pub fn cmd_incremental_index(project_root: &Path, quiet: bool, no_embed: bool) -> Result<()> {
     cmd_incremental_index_opts(project_root, quiet, no_embed, false)
 }
@@ -392,8 +431,9 @@ pub fn cmd_incremental_index_opts(
     json: bool,
 ) -> Result<()> {
     let started = std::time::Instant::now();
-    let db_path = project_root.join(CODE_GRAPH_DIR).join("index.db");
-    warn_if_index_locked(&project_root.join(CODE_GRAPH_DIR));
+    // Write-side lock + write dir are always the NEW dir; the legacy dir is
+    // read-only. After the one-shot copy below, `index_db_path` resolves new.
+    warn_if_index_locked(&code_graph_dir_for_write(project_root));
     // Covers the incremental path too, not just the full-index one inside
     // build_full_index_at: an index created before this existed (or by a user
     // who removed the line) gets the entry back on the next run (audit DB-4).
@@ -405,20 +445,53 @@ pub fn cmd_incremental_index_opts(
     // Stale-only: a live server's file has a fresh mtime and is left alone.
     crate::indexer::pipeline::remove_stale_indexing_status(project_root);
 
+    // One-shot legacy migration before the exists-branch: new DB absent +
+    // legacy DB present → copy, then take the incremental path below.
+    // Fail-open: `Ok(false)` falls through to whichever branch fits.
+    let _ = maybe_migrate_legacy_dir(project_root);
+    let db_path = index_db_path(project_root);
+
     // No existing DB → full index. Delegate to build_full_index_at so the
     // full-index + embed path is shared with rebuild-index (no drift).
+    // NOTE: `db_path` here is always the NEW dir when nothing exists
+    // (`index_db_path` defaults to new), so a fresh build never lands in the
+    // legacy dir.
     if !db_path.exists() {
         if !quiet {
             eprintln!("No index found, creating full index...");
         }
-        let result = build_full_index_at(&db_path, project_root, quiet, no_embed)?;
+        let result = build_full_index_at(
+            &code_graph_dir_for_write(project_root).join("index.db"),
+            project_root,
+            quiet,
+            no_embed,
+        )?;
         if json {
             emit_index_json("full", &result, started);
         }
         return Ok(());
     }
 
-    cleanup_legacy_db_files(&project_root.join(CODE_GRAPH_DIR));
+    // A legacy-routed `db_path` (migration refused/copied nothing, e.g. a
+    // symlinked new dir) must NOT be incrementally written in place: the old
+    // dir is read-only. Fall through to a full build into the new dir instead.
+    if is_legacy_db_path(&db_path) {
+        if !quiet {
+            eprintln!("Legacy index found, building fresh index in .codegraph/...");
+        }
+        let result = build_full_index_at(
+            &code_graph_dir_for_write(project_root).join("index.db"),
+            project_root,
+            quiet,
+            no_embed,
+        )?;
+        if json {
+            emit_index_json("full", &result, started);
+        }
+        return Ok(());
+    }
+
+    cleanup_legacy_db_files(&code_graph_dir_for_write(project_root));
 
     // Open with vec support so embeddings can be stored
     let db = Database::open_with_vec(&db_path)?;

@@ -2846,7 +2846,7 @@ fn a_symlinked_code_graph_dir_is_refused_before_anything_is_written() {
         Ok(_) => panic!("a symlinked .code-graph must be refused"),
     };
     assert!(
-        err.to_string().contains(".code-graph"),
+        err.to_string().contains(".codegraph"),
         "the refusal must name the directory it refuses: {err}"
     );
     assert!(
@@ -2935,7 +2935,7 @@ fn destructive_commands_refuse_a_symlinked_data_dir_before_touching_anything() {
 fn replace_refuses_when_a_held_lock_file_has_a_hardlink() {
     use std::os::unix::io::AsRawFd;
     let dir = tempfile::TempDir::new().unwrap();
-    let cg = dir.path().join(".code-graph");
+    let cg = dir.path().join(crate::domain::CODE_GRAPH_DIR);
     std::fs::create_dir_all(&cg).unwrap();
     let lock = cg.join("index.lock");
     std::fs::write(&lock, "").unwrap();
@@ -3019,4 +3019,141 @@ fn read_source_context_reports_the_range_it_actually_covers() {
     // ctx = 0: the range IS the symbol, which is what makes the two fields
     // omittable (and keeps a `context_lines: 0` response byte-identical).
     check(4, 6, 0, (4, 6));
+}
+
+// ── Task 1: data-dir migration to `.codegraph/` with legacy read-compat ──
+
+#[test]
+fn new_dir_constant_is_codegraph() {
+    assert_eq!(CODE_GRAPH_DIR, ".codegraph");
+    assert_eq!(crate::domain::LEGACY_CODE_GRAPH_DIR, ".code-graph");
+}
+
+#[test]
+fn index_db_path_prefers_new_dir() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join(CODE_GRAPH_DIR)).unwrap();
+    std::fs::write(root.join(CODE_GRAPH_DIR).join("index.db"), b"new").unwrap();
+    std::fs::create_dir_all(root.join(crate::domain::LEGACY_CODE_GRAPH_DIR)).unwrap();
+    std::fs::write(
+        root.join(crate::domain::LEGACY_CODE_GRAPH_DIR)
+            .join("index.db"),
+        b"legacy",
+    )
+    .unwrap();
+    let got = index_db_path(root);
+    assert_eq!(got, root.join(CODE_GRAPH_DIR).join("index.db"));
+}
+
+#[test]
+fn index_db_path_falls_back_to_legacy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join(crate::domain::LEGACY_CODE_GRAPH_DIR)).unwrap();
+    std::fs::write(
+        root.join(crate::domain::LEGACY_CODE_GRAPH_DIR)
+            .join("index.db"),
+        b"legacy",
+    )
+    .unwrap();
+    let got = index_db_path(root);
+    assert_eq!(
+        got,
+        root.join(crate::domain::LEGACY_CODE_GRAPH_DIR)
+            .join("index.db")
+    );
+}
+
+#[test]
+fn index_db_path_defaults_to_new_when_neither() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let got = index_db_path(root);
+    assert_eq!(got, root.join(CODE_GRAPH_DIR).join("index.db"));
+    assert!(
+        !root.join(CODE_GRAPH_DIR).exists()
+            && !root.join(crate::domain::LEGACY_CODE_GRAPH_DIR).exists(),
+        "read-routing must create nothing on disk"
+    );
+}
+
+#[test]
+fn code_graph_dir_for_write_is_always_new() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join(crate::domain::LEGACY_CODE_GRAPH_DIR)).unwrap();
+    assert_eq!(code_graph_dir_for_write(root), root.join(CODE_GRAPH_DIR));
+}
+
+#[test]
+fn resolve_project_root_from_sees_new_index() {
+    // Mirrors resolve_project_root_prefers_cwd_index_over_git_ancestor
+    // (tests.rs:1148-1151): an unindexed `.git` root with a new-dir index at
+    // cwd resolves to cwd. A legacy-dir index outside the `.git` boundary
+    // must not hijack the resolution.
+    let tmp = tempfile::tempdir().unwrap();
+    let outer = tmp.path();
+    std::fs::create_dir_all(outer.join(crate::domain::LEGACY_CODE_GRAPH_DIR)).unwrap();
+    std::fs::write(
+        outer
+            .join(crate::domain::LEGACY_CODE_GRAPH_DIR)
+            .join("index.db"),
+        b"",
+    )
+    .unwrap();
+    let root = outer.join("proj");
+    std::fs::create_dir_all(root.join(".git")).unwrap();
+    let subdir = root.join("sub");
+    let sub_idx = subdir.join(CODE_GRAPH_DIR);
+    std::fs::create_dir_all(&sub_idx).unwrap();
+    std::fs::write(sub_idx.join("index.db"), b"").unwrap();
+    assert_eq!(resolve_project_root_from(&subdir), subdir);
+}
+
+#[test]
+fn maybe_migrate_copies_legacy_then_incremental() {
+    let project = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(project.path().join("src")).unwrap();
+    std::fs::write(
+        project.path().join("src/a.ts"),
+        "export function alpha(): number { return 1; }\n",
+    )
+    .unwrap();
+    // Valid legacy DB built by the real indexer entry point.
+    let legacy_db = project
+        .path()
+        .join(crate::domain::LEGACY_CODE_GRAPH_DIR)
+        .join("index.db");
+    build_full_index_at(&legacy_db, project.path(), true, true).unwrap();
+    let before = std::fs::read(&legacy_db).unwrap();
+
+    assert!(maybe_migrate_legacy_dir(project.path()).unwrap());
+    let new_db = project.path().join(CODE_GRAPH_DIR).join("index.db");
+    assert!(new_db.exists(), "migration must copy the legacy index.db");
+    assert_eq!(
+        std::fs::read(&legacy_db).unwrap(),
+        before,
+        "migration must not modify the legacy dir"
+    );
+    // The copied index must be usable: incremental runs against the new dir.
+    cmd_incremental_index(project.path(), true, true).unwrap();
+    assert_eq!(
+        std::fs::read(&legacy_db).unwrap(),
+        before,
+        "incremental-index must leave the legacy index.db byte-identical (read-only fallback)"
+    );
+}
+
+#[test]
+fn maybe_migrate_is_false_when_nothing_legacy() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let migrated = maybe_migrate_legacy_dir(root).unwrap();
+    assert!(!migrated);
+    assert!(
+        !root.join(CODE_GRAPH_DIR).exists()
+            && !root.join(crate::domain::LEGACY_CODE_GRAPH_DIR).exists(),
+        "nothing legacy means nothing created"
+    );
 }

@@ -353,7 +353,7 @@ fn extract_tool_payload(resp: &Value) -> Value {
 
 /// P0.1: `run_serve` must serve a 0-tool stub in a non-project cwd (no
 /// .git/manifest), mirroring the JS launcher gate (mcp-launcher.js). It must
-/// NOT create `.code-graph/` in the throwaway dir. Closes the parallel path
+/// NOT create `.codegraph/` in the throwaway dir. Closes the parallel path
 /// the v0.33.0 launcher gate left open for direct-binary invocations.
 #[test]
 fn mcp_non_project_cwd_serves_zero_tool_stub() {
@@ -396,8 +396,8 @@ fn mcp_non_project_cwd_serves_zero_tool_stub() {
 
     // and no index must have been created in the throwaway dir
     assert!(
-        !bare.path().join(".code-graph").exists(),
-        "stub must not create .code-graph/ in a non-project cwd"
+        !bare.path().join(".codegraph").exists(),
+        "stub must not create .codegraph/ in a non-project cwd"
     );
 }
 

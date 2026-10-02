@@ -409,7 +409,7 @@ fn test_stdio_unknown_tool() {
 }
 
 /// Regression: a server spawned in a project dir that lives UNDER another git
-/// repo must flush its metrics into ITS OWN `.code-graph`, never walk up to the
+/// repo must flush its metrics into ITS OWN `.codegraph`, never walk up to the
 /// ancestor repo's `usage.jsonl`. Before `spawn_server` dropped a `.git` marker,
 /// `cli::resolve_project_root_from` walked from the bare fixture dir up to the
 /// real code-graph-mcp repo's `.git` and appended test metrics (`nonexistent_tool`,
@@ -439,14 +439,14 @@ fn test_stdio_metrics_isolated_from_ancestor_repo() {
     drop(stdin);
     let _ = child.wait();
 
-    // Metrics must land in the fixture's own .code-graph, proving the server did
+    // Metrics must land in the fixture's own .codegraph, proving the server did
     // NOT adopt the ancestor repo as its project root.
-    let local_usage = dir.join(".code-graph").join("usage.jsonl");
+    let local_usage = dir.join(".codegraph").join("usage.jsonl");
     let isolated = local_usage.exists();
     let _ = std::fs::remove_dir_all(&dir);
     assert!(
         isolated,
         "metrics leaked: a server spawned under the repo did not write its own \
-         .code-graph/usage.jsonl — resolve_project_root walked up to the ancestor .git"
+         .codegraph/usage.jsonl — resolve_project_root walked up to the ancestor .git"
     );
 }

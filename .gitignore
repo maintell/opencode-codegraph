@@ -2,6 +2,7 @@
 /target
 
 # Runtime data
+.codegraph/
 .code-graph/
 models/
 

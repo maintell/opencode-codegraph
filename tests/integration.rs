@@ -135,8 +135,8 @@ export function handleLogin(req: Request, res: Response) {
     assert_eq!(result["status"], "rebuilt");
     assert!(result["files_indexed"].as_i64().unwrap() >= 2);
 
-    // .code-graph directory should exist
-    assert!(project.path().join(".code-graph/index.db").exists());
+    // .codegraph directory should exist
+    assert!(project.path().join(".codegraph/index.db").exists());
 }
 
 #[test]

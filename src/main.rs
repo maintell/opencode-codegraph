@@ -151,7 +151,7 @@ fn main() -> Result<()> {
     }
 
     // Funnel visibility: a model-initiated CLI query IS the conversion the deny
-    // hook works toward — record it (best-effort, never creates .code-graph/;
+    // hook works toward — record it (best-effort, never creates .codegraph/;
     // hook-internal answer runs carry CODE_GRAPH_INTERNAL=1 and are skipped).
     //
     // AFTER the subscriber, not before (audit 2026-08-29 CON-17). This path
@@ -190,18 +190,15 @@ fn main() -> Result<()> {
             let project_root = code_graph_mcp::cli::resolve_project_root()?;
             // Silent bail when the resolved root has neither a .git anchor nor an
             // existing index. Without this guard the PostToolUse hook would create
-            // .code-graph/ in multi-repo workspace parents (issue #8).
+            // .codegraph/ in multi-repo workspace parents (issue #8).
             // Interactive runs get a helpful message so users know *why* nothing
             // happened — silent exit-0 was indistinguishable from a real index.
             let has_git = project_root.join(".git").exists();
-            let has_index = project_root
-                .join(code_graph_mcp::domain::CODE_GRAPH_DIR)
-                .join("index.db")
-                .exists();
+            let has_index = code_graph_mcp::cli::has_any_index_db(&project_root);
             if !has_git && !has_index {
                 if !quiet {
                     eprintln!(
-                        "[code-graph] Skipping index: no .git anchor or existing .code-graph/ at {}.\n  \
+                        "[code-graph] Skipping index: no .git anchor or existing .codegraph/ at {}.\n  \
                          Run `git init` first, or cd into a git repository.",
                         project_root.display()
                     );
@@ -223,7 +220,7 @@ fn main() -> Result<()> {
                             "files_with_parse_errors": 0,
                             "elapsed_ms": 0,
                             "skipped": format!(
-                                "no .git anchor or existing .code-graph/ at {}",
+                                "no .git anchor or existing .codegraph/ at {}",
                                 project_root.display()
                             ),
                         })
@@ -641,7 +638,7 @@ fn print_help() {
     println!("                        (Note: there is no CLI watcher; the MCP server watches files while it runs)");
     println!("    doctor              Diagnose and repair environment issues");
     println!("    benchmark           Benchmark index speed, query latency, token savings");
-    println!("    stats               Aggregate session metrics from .code-graph/usage.jsonl");
+    println!("    stats               Aggregate session metrics from .codegraph/usage.jsonl");
     println!("                        (which tools you used, search/index activity)");
     println!("    outcome             Retrieval adoption from session transcripts (field-MRR; read-only)");
     println!("    adopt               Install the steering block into the project CLAUDE.md + detail doc");
@@ -745,7 +742,7 @@ fn run_serve() -> Result<()> {
     // isNonProjectCwd gate). When the binary is invoked directly — bypassing the
     // JS launcher, e.g. a dev `.mcp.json` or a global MCP config pointing at the
     // binary — in a dir with no project marker, serve a 0-tool stub: no database,
-    // no embedding model, no `.code-graph/`, no NOISY instructions. Otherwise the
+    // no embedding model, no `.codegraph/`, no NOISY instructions. Otherwise the
     // plugin half-activates in throwaway dirs (the ~2035 headless /tmp `claude -p`
     // calls). CODE_GRAPH_FORCE_PLUGIN_MCP=1 overrides, same as the launcher.
     let force_plugin = std::env::var("CODE_GRAPH_FORCE_PLUGIN_MCP").ok().as_deref() == Some("1");

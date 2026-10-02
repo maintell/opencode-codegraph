@@ -1,11 +1,11 @@
-//! Keeping `.code-graph/` out of the user's commits.
+//! Keeping `.codegraph/` out of the user's commits.
 //!
 //! The index directory holds a multi-hundred-MB SQLite file that is a pure
 //! cache — committing it is never what the user wants, and `git add -A` will do
 //! exactly that unless git is told to ignore it. The write used to live inside
 //! `McpServer::from_project_root`, so a pure-CLI install (hook-driven
 //! `incremental-index`, never starting the MCP server) left a fresh repo with an
-//! untracked `.code-graph/` and no ignore entry (audit 2026-08-02 DB-4).
+//! untracked `.codegraph/` and no ignore entry (audit 2026-08-02 DB-4).
 //!
 //! The entry goes to the repository's local exclude file, `info/exclude` in the
 //! git dir, never to the tracked `.gitignore` (decision D3, 2026-09-28 usage
@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 
 use crate::domain::CODE_GRAPH_DIR;
 
-/// Ensure git ignores `<project_root>/.code-graph/`.
+/// Ensure git ignores `<project_root>/.codegraph/`.
 ///
 /// Nothing is written when `.gitignore` or `info/exclude` already names the
 /// directory (either spelling), or when `project_root` is not a git work tree:
@@ -33,18 +33,20 @@ use crate::domain::CODE_GRAPH_DIR;
 ///
 /// Set `CODE_GRAPH_NO_GITIGNORE=1` to disable this entirely — for a user whose
 /// own ignore rules (e.g. a global `core.excludesFile`) already cover
-/// `.code-graph/`.
+/// `.codegraph/`.
 pub(crate) fn ensure_code_graph_dir_ignored(project_root: &Path) {
     let disabled = std::env::var("CODE_GRAPH_NO_GITIGNORE").ok().as_deref() == Some("1");
     ensure_code_graph_dir_ignored_unless(project_root, disabled);
 }
 
 fn names_code_graph_dir(content: &str) -> bool {
-    // Both `.code-graph` and `.code-graph/`, so a hand-written entry does not get
-    // a duplicate appended on every run.
-    content
-        .lines()
-        .any(|line| line.trim().trim_end_matches('/') == CODE_GRAPH_DIR)
+    // Both the new dir and either slash spelling, so a hand-written entry
+    // (including a pre-rename `.code-graph` one, which still does its job for
+    // the legacy dir) does not get a duplicate appended on every run.
+    content.lines().any(|line| {
+        let t = line.trim().trim_end_matches('/');
+        t == CODE_GRAPH_DIR || t == crate::domain::LEGACY_CODE_GRAPH_DIR
+    })
 }
 
 /// The exclude file git reads for `project_root`: `<git-dir>/info/exclude`, where
@@ -157,7 +159,7 @@ mod tests {
     fn writes_the_entry_to_info_exclude_and_never_to_gitignore() {
         let root = repo();
         ensure_code_graph_dir_ignored_unless(root.path(), false);
-        assert_eq!(exclude_of(root.path()), ".code-graph/\n");
+        assert_eq!(exclude_of(root.path()), ".codegraph/\n");
         assert!(
             !root.path().join(".gitignore").exists(),
             "the tracked .gitignore must not be created"
@@ -171,7 +173,7 @@ mod tests {
         std::fs::write(&gi, "node_modules\n").unwrap();
         ensure_code_graph_dir_ignored_unless(root.path(), false);
         assert_eq!(std::fs::read_to_string(&gi).unwrap(), "node_modules\n");
-        assert_eq!(exclude_of(root.path()), ".code-graph/\n");
+        assert_eq!(exclude_of(root.path()), ".codegraph/\n");
     }
 
     #[test]
@@ -180,14 +182,14 @@ mod tests {
         std::fs::create_dir_all(root.path().join(".git/info")).unwrap();
         std::fs::write(root.path().join(".git/info/exclude"), "*.swp").unwrap();
         ensure_code_graph_dir_ignored_unless(root.path(), false);
-        assert_eq!(exclude_of(root.path()), "*.swp\n.code-graph/\n");
+        assert_eq!(exclude_of(root.path()), "*.swp\n.codegraph/\n");
     }
 
     /// Every repo indexed before the switch already has a `.gitignore` entry.
     /// That is enough; writing a second rule to `info/exclude` would be noise.
     #[test]
     fn an_existing_gitignore_entry_is_enough() {
-        for existing in [".code-graph/\n", ".code-graph\n"] {
+        for existing in [".codegraph/\n", ".codegraph\n"] {
             let root = repo();
             std::fs::write(root.path().join(".gitignore"), existing).unwrap();
             ensure_code_graph_dir_ignored_unless(root.path(), false);
@@ -201,13 +203,29 @@ mod tests {
     /// Idempotence across BOTH spellings in the exclude file itself.
     #[test]
     fn is_idempotent_for_both_slash_spellings() {
-        for existing in [".code-graph/\n", ".code-graph\n"] {
+        for existing in [".codegraph/\n", ".codegraph\n"] {
             let root = repo();
             std::fs::create_dir_all(root.path().join(".git/info")).unwrap();
             std::fs::write(root.path().join(".git/info/exclude"), existing).unwrap();
             ensure_code_graph_dir_ignored_unless(root.path(), false);
             ensure_code_graph_dir_ignored_unless(root.path(), false);
             assert_eq!(exclude_of(root.path()), existing);
+        }
+    }
+
+    /// Pre-rename repos already ignore the legacy dir. A legacy entry still
+    /// ignores the legacy dir, so it suppresses a second write — but the new
+    /// dir is NOT covered by it; covered only when both entries exist.
+    #[test]
+    fn a_legacy_gitignore_entry_is_enough_for_the_legacy_dir_only() {
+        for existing in [".code-graph/\n", ".code-graph\n"] {
+            let root = repo();
+            std::fs::write(root.path().join(".gitignore"), existing).unwrap();
+            ensure_code_graph_dir_ignored_unless(root.path(), false);
+            assert!(
+                !root.path().join(".git/info/exclude").exists(),
+                "{existing:?} already ignores the legacy dir; nothing more to write"
+            );
         }
     }
 
@@ -242,7 +260,7 @@ mod tests {
 
         assert_eq!(
             std::fs::read_to_string(main_git.join("info/exclude")).unwrap(),
-            ".code-graph/\n"
+            ".codegraph/\n"
         );
         assert!(!wt_git.join("info").exists(), "not the per-worktree dir");
         assert!(!wt.join(".gitignore").exists());
@@ -287,7 +305,7 @@ mod tests {
 
         assert_eq!(
             std::fs::read_to_string(real.join("info/exclude")).unwrap_or_default(),
-            ".code-graph/\n"
+            ".codegraph/\n"
         );
     }
 
@@ -419,7 +437,7 @@ mod tests {
         // Positive control: a regular repo next to it still gets the entry.
         let ok = repo();
         ensure_code_graph_dir_ignored_unless(ok.path(), false);
-        assert_eq!(exclude_of(ok.path()), ".code-graph/\n");
+        assert_eq!(exclude_of(ok.path()), ".codegraph/\n");
     }
 
     /// The switch disables the write entirely.
@@ -433,6 +451,6 @@ mod tests {
         // Positive control: the same call with the switch off still writes.
         let control = repo();
         ensure_code_graph_dir_ignored_unless(control.path(), false);
-        assert_eq!(exclude_of(control.path()), ".code-graph/\n");
+        assert_eq!(exclude_of(control.path()), ".codegraph/\n");
     }
 }

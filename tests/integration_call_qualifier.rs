@@ -67,7 +67,7 @@ fn chain_builder_drops_intermediate_callers() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -98,7 +98,7 @@ fn bare_name_qualifier_drops_phantom_callers_for_file_create() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -128,7 +128,7 @@ fn path_qualifier_picks_module_specific_candidate() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -177,7 +177,7 @@ fn self_method_within_impl_uses_correct_type() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -223,7 +223,7 @@ fn self_method_resolves_across_split_impl_blocks() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -239,7 +239,7 @@ fn self_method_resolves_across_split_impl_blocks() {
 fn index_one_file(content: &str) -> (TempDir, Database) {
     let tmp = TempDir::new().unwrap();
     write(tmp.path(), "src/lib.rs", content);
-    let db_path = tmp.path().join(".code-graph/graph.db");
+    let db_path = tmp.path().join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, tmp.path(), None, None).unwrap();
@@ -434,7 +434,7 @@ mod tests {
 }
 "#,
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -473,7 +473,7 @@ fn an_inherent_self_call_reaches_a_module_the_layout_cannot_place() {
         "tests/it.rs",
         "mod common;\nuse common::Harness;\nimpl Harness {\n    fn go(&self) -> u8 { self.m() }\n}\n",
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -522,7 +522,7 @@ impl List {
         "pub struct Holder;\nimpl Holder {\n    pub fn borrow(&self) -> &Self { self }\n}\npub struct List;\nimpl Clone for List {\n    fn clone(&self) -> Self { List }\n}\n",
     );
     write(root, "tests/t.rs", "mod common;\n");
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -593,7 +593,7 @@ fn an_inherent_impl_defining_the_method_decides_despite_a_nested_namesake() {
         "src/other.rs",
         "pub struct W;\nimpl W {\n    pub fn id(&self) -> u8 { 9 }\n}\n",
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -632,7 +632,7 @@ impl W for Cursor<u16> {
         "src/more.rs",
         "use crate::{Cursor, W};\nimpl W for Cursor<u32> {\n    fn flush(&self) {}\n    fn shutdown(&self) {}\n}\n",
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -720,7 +720,7 @@ impl Holder {
 }
 "#,
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -773,7 +773,7 @@ fn a_buffered_typed_call_never_binds_what_its_type_rules_out() {
         "src/b.rs",
         "pub struct Token;\nimpl Token {\n    pub fn poke(&self) {}\n}\n",
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -961,7 +961,7 @@ fn self_method_stays_in_its_own_crate() {
     );
     write(root, "b/src/lib.rs", "mod wheel;\n");
     write(root, "b/src/wheel.rs", &wheel("b"));
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1026,7 +1026,7 @@ fn self_method_in_a_split_impl_stays_in_its_own_crate() {
         "b/src/lib.rs",
         "pub struct Wheel;\nimpl Wheel {\n    pub fn level_for(&self) {}\n}\n",
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1060,7 +1060,7 @@ fn self_call_still_reaches_an_inherent_method_that_outranks_the_files_trait_meth
         "src/more.rs",
         "impl crate::Foo {\n    pub fn m(&self) {}\n}\n",
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1103,7 +1103,7 @@ fn self_call_in_an_inherent_impl_never_leaves_its_crate() {
         "b/src/lib.rs",
         "pub struct Builder;\nimpl Default for Builder {\n    fn default() -> Self { Builder }\n}\n",
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1142,7 +1142,7 @@ fn self_method_of_a_type_from_another_crate_still_binds() {
         "b/src/lib.rs",
         "pub trait Show { fn show(&self); }\nimpl Show for a::Foo {\n    fn show(&self) { self.name(); }\n}\n",
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1165,7 +1165,7 @@ fn self_method_prefers_its_own_file_among_same_named_types_of_one_crate() {
     write(root, "src/lib.rs", "mod broadcast;\nmod mpsc;\n");
     write(root, "src/broadcast.rs", receiver);
     write(root, "src/mpsc.rs", receiver);
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1212,7 +1212,7 @@ fn trait_method_calling_its_types_inherent_namesake_binds_across_crates() {
         "b/src/lib.rs",
         "pub trait Listener { fn poll_accept(&mut self); }\nimpl Listener for a::TcpListener {\n    fn poll_accept(&mut self) { Self::poll_accept(self) }\n}\n",
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1344,7 +1344,7 @@ impl W for Cursor<u16> {
         "src/more.rs",
         "use crate::Cursor;\n\n\n\nimpl<T> Cursor<T> {\n    pub fn flush(&self) {}\n}\n",
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1434,7 +1434,7 @@ fn trait_impl_for_another_modules_type_is_not_sourced_at_this_files_namesake() {
         "src/b.rs",
         "pub struct Foo;\nimpl crate::Tr for crate::a::Foo {\n    fn m(&self) {}\n}\n",
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1503,7 +1503,7 @@ fn non_rust_callgraph_unchanged() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1552,7 +1552,7 @@ fn path_qualifier_resolves_single_file_rust_mod() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1589,7 +1589,7 @@ fn same_file_generic_impl_method_edges_dont_fan_out() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1661,7 +1661,7 @@ fn path_qualifier_keeps_same_file_target() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1701,7 +1701,7 @@ fn receiver_call_resolves_unique_method() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1749,7 +1749,7 @@ fn receiver_call_resolves_method_not_free_function_same_name() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1806,7 +1806,7 @@ fn receiver_call_with_ambiguous_method_name_stays_unresolved() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1854,7 +1854,7 @@ fn receiver_call_prefers_same_file_method_over_cross_file_ambiguity() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1907,7 +1907,7 @@ fn js_method_call_resolves_non_ecmascript_builtin_name() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -1955,7 +1955,7 @@ fn js_method_call_still_drops_real_ecmascript_builtin() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -2006,7 +2006,7 @@ fn php_method_call_resolves_collection_verb_names() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -2076,7 +2076,7 @@ fn express_route_with_imported_handler_produces_routes_to_edge() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -2132,7 +2132,7 @@ def save(id, conflicts):
     writer.write(id, conflicts)
 "#,
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -2186,7 +2186,7 @@ def run(x):
     d.process(x)
 "#,
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -2234,7 +2234,7 @@ def save(writer: DataWriter, id, conflicts):
     writer.write(id, conflicts)
 "#,
     );
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -2348,7 +2348,7 @@ class ProfileWriter:
     let full_root = full_tmp.path();
     write(full_root, "caller.py", CALLER_SRC);
     write(full_root, "writer.py", WRITER_SRC);
-    let full_db_path = full_root.join(".code-graph/graph.db");
+    let full_db_path = full_root.join(".codegraph/graph.db");
     fs::create_dir_all(full_db_path.parent().unwrap()).unwrap();
     let full_db = Database::open(&full_db_path).unwrap();
     run_full_index(&full_db, full_root, None, None).unwrap();
@@ -2362,7 +2362,7 @@ class ProfileWriter:
     let incr_tmp = TempDir::new().unwrap();
     let incr_root = incr_tmp.path();
     write(incr_root, "caller.py", CALLER_SRC);
-    let incr_db_path = incr_root.join(".code-graph/graph.db");
+    let incr_db_path = incr_root.join(".codegraph/graph.db");
     fs::create_dir_all(incr_db_path.parent().unwrap()).unwrap();
     let incr_db = Database::open(&incr_db_path).unwrap();
     run_incremental_index(&incr_db, incr_root, None, None).unwrap();
@@ -2433,7 +2433,7 @@ fn path_qualifier_strips_own_crate_name() {
     "#,
     );
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -2479,7 +2479,7 @@ fn bare_crate_root_qualifier_does_not_fan_out_to_same_name_siblings() {
     write(root, "src/server.rs", "pub fn run() { }\n");
     write(root, "src/main.rs", "fn main() { demo::run(); }\n");
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -2513,7 +2513,7 @@ fn bare_crate_root_qualifier_still_resolves_a_unique_target() {
     write(root, "src/lib.rs", "pub fn run() { }\n");
     write(root, "src/main.rs", "fn main() { demo::run(); }\n");
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();
@@ -2552,7 +2552,7 @@ fn crate_root_strip_does_not_fire_when_the_chain_as_written_matches() {
     write(root, "src/thirdparty/helper/mod.rs", "pub fn go() { }\n");
     write(root, "src/main.rs", "fn main() { utils::helper::go(); }\n");
 
-    let db_path = root.join(".code-graph/graph.db");
+    let db_path = root.join(".codegraph/graph.db");
     fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let db = Database::open(&db_path).unwrap();
     run_full_index(&db, root, None, None).unwrap();

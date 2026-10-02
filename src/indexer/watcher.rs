@@ -29,22 +29,27 @@ pub enum WatchEvent {
 
 /// Root-relative paths whose changes must never count as a project change.
 ///
-/// `.code-graph/` is our OWN data directory: `index.db` plus its WAL/SHM
+/// `.codegraph/` is our OWN data directory: `index.db` plus its WAL/SHM
 /// sidecars, `usage.jsonl` and `recommendations.jsonl` are written by the
 /// server itself, often several times per tool call. The merkle scan skips the
 /// directory entirely, so an event there can only ever produce a no-op rescan —
 /// but the server counted it as a change, which kept `has_changes` true almost
 /// continuously: every tool call paid a full-tree stat pass and the debounce
-/// branch was effectively unreachable.
+/// branch was effectively unreachable. The pre-rename `.code-graph/` stays
+/// ignored too (read-only legacy fallback).
 ///
 /// `.git/` is the same shape (never indexed, see merkle's scan skip) and churns
 /// on every git command. Note the exact-segment test: `.gitignore` and
 /// `.code-graph.toml` are ordinary files and stay watched.
 pub fn is_ignored_watch_path(rel: &str) -> bool {
     let rel = rel.trim_start_matches("./");
-    [crate::domain::CODE_GRAPH_DIR, ".git"]
-        .iter()
-        .any(|dir| rel == *dir || rel.strip_prefix(dir).is_some_and(|r| r.starts_with('/')))
+    [
+        crate::domain::CODE_GRAPH_DIR,
+        crate::domain::LEGACY_CODE_GRAPH_DIR,
+        ".git",
+    ]
+    .iter()
+    .any(|dir| rel == *dir || rel.strip_prefix(dir).is_some_and(|r| r.starts_with('/')))
 }
 
 /// Bound on pending watcher events. A full channel means the main-loop consumer
@@ -212,10 +217,14 @@ mod tests {
     #[test]
     fn test_is_ignored_watch_path_matches_whole_segments_only() {
         // Our own data dir: the server writes here several times per tool call.
+        assert!(is_ignored_watch_path(".codegraph"));
+        assert!(is_ignored_watch_path(".codegraph/index.db-wal"));
+        assert!(is_ignored_watch_path(".codegraph/usage.jsonl"));
+        assert!(is_ignored_watch_path("./.codegraph/recommendations.jsonl"));
+        // Pre-rename legacy dir: read-only fallback, still never a project change.
         assert!(is_ignored_watch_path(".code-graph"));
         assert!(is_ignored_watch_path(".code-graph/index.db-wal"));
-        assert!(is_ignored_watch_path(".code-graph/usage.jsonl"));
-        assert!(is_ignored_watch_path("./.code-graph/recommendations.jsonl"));
+        assert!(is_ignored_watch_path("./.code-graph/usage.jsonl"));
         assert!(is_ignored_watch_path(".git"));
         assert!(is_ignored_watch_path(".git/refs/heads/main"));
 

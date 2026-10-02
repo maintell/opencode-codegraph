@@ -104,7 +104,7 @@ fn cli_snapshot_url_override_honors_only_its_own_env_signal() {
     ];
 
     for (label, signal, honored) in cases {
-        let _ = std::fs::remove_dir_all(repo.path().join(".code-graph"));
+        let _ = std::fs::remove_dir_all(repo.path().join(".codegraph"));
         let mut cmd = Command::new(cli_bin());
         cmd.args(["reindex", "--from-snapshot"])
             .current_dir(repo.path())
