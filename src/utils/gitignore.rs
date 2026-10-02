@@ -19,9 +19,14 @@ use crate::domain::CODE_GRAPH_DIR;
 
 /// Ensure git ignores `<project_root>/.codegraph/`.
 ///
-/// Nothing is written when `.gitignore` or `info/exclude` already names the
-/// directory (either spelling), or when `project_root` is not a git work tree:
+/// Nothing is written when `.gitignore` or `info/exclude` already names the new
+/// directory, or when `project_root` is not a git work tree:
 /// with no git there is nothing to commit it into.
+/// A legacy `.code-graph` entry does NOT count: that pattern never matched
+/// `.codegraph/`, so treating it as enough left the new DB unignored and
+/// `git add -A` committed the cache (DB-4). Legacy suppression applies only
+/// to legacy-named writes, which no longer happen — no legacy entry is ever
+/// written; only the check is split.
 ///
 /// Idempotent and best-effort: an unwritable exclude file is a warning, never an
 /// error — indexing must not fail because the ignore rule could not be written.
@@ -39,13 +44,14 @@ pub(crate) fn ensure_code_graph_dir_ignored(project_root: &Path) {
     ensure_code_graph_dir_ignored_unless(project_root, disabled);
 }
 
-fn names_code_graph_dir(content: &str) -> bool {
-    // Both the new dir and either slash spelling, so a hand-written entry
-    // (including a pre-rename `.code-graph` one, which still does its job for
-    // the legacy dir) does not get a duplicate appended on every run.
+fn names_new_dir(content: &str) -> bool {
+    // Only the new spelling counts: a `.code-graph` pattern never matched
+    // `.codegraph/`, so a legacy entry must not suppress the new write.
+    // Legacy suppression would apply only to legacy-named writes, which are
+    // no longer emitted — hence no legacy arm here.
     content.lines().any(|line| {
         let t = line.trim().trim_end_matches('/');
-        t == CODE_GRAPH_DIR || t == crate::domain::LEGACY_CODE_GRAPH_DIR
+        t == CODE_GRAPH_DIR
     })
 }
 
@@ -109,14 +115,14 @@ fn ensure_code_graph_dir_ignored_unless(project_root: &Path, disabled: bool) {
     // An existing `.gitignore` entry (every repo this tool indexed before the
     // switch to `info/exclude`) already does the job; leave both files alone.
     let gitignore = std::fs::read_to_string(project_root.join(".gitignore")).unwrap_or_default();
-    if names_code_graph_dir(&gitignore) {
+    if names_new_dir(&gitignore) {
         return;
     }
     let Some(exclude) = exclude_path(project_root) else {
         return;
     };
     let content = std::fs::read_to_string(&exclude).unwrap_or_default();
-    if names_code_graph_dir(&content) {
+    if names_new_dir(&content) {
         return;
     }
     if let Some(info) = exclude.parent() {
@@ -200,7 +206,10 @@ mod tests {
         }
     }
 
-    /// Idempotence across BOTH spellings in the exclude file itself.
+    /// Idempotence for both spellings in the exclude file itself: either entry
+    /// suppresses its own re-write, and the new entry follows a pre-existing
+    /// legacy one without disturbing it. Only the new spelling counts for the
+    /// new write.
     #[test]
     fn is_idempotent_for_both_slash_spellings() {
         for existing in [".codegraph/\n", ".codegraph\n"] {
@@ -213,18 +222,46 @@ mod tests {
         }
     }
 
-    /// Pre-rename repos already ignore the legacy dir. A legacy entry still
-    /// ignores the legacy dir, so it suppresses a second write — but the new
-    /// dir is NOT covered by it; covered only when both entries exist.
+    /// Pre-rename repos carry a legacy `.code-graph` entry that never matched
+    /// `.codegraph/`. It must NOT suppress the new write (DB-4): the new entry
+    /// goes to `info/exclude`, leaving the legacy `.gitignore` line alone.
     #[test]
-    fn a_legacy_gitignore_entry_is_enough_for_the_legacy_dir_only() {
+    fn a_legacy_gitignore_entry_does_not_suppress_the_new_write() {
+        // Legacy entry in .gitignore only.
         for existing in [".code-graph/\n", ".code-graph\n"] {
             let root = repo();
             std::fs::write(root.path().join(".gitignore"), existing).unwrap();
             ensure_code_graph_dir_ignored_unless(root.path(), false);
+            assert_eq!(
+                exclude_of(root.path()),
+                ".codegraph/\n",
+                "{existing:?} never ignored the new dir; the new entry must be written"
+            );
+            assert_eq!(
+                std::fs::read_to_string(root.path().join(".gitignore")).unwrap(),
+                existing,
+                "the legacy .gitignore line must be left alone"
+            );
+            // Idempotent: a second run must not append a duplicate line.
+            ensure_code_graph_dir_ignored_unless(root.path(), false);
+            assert_eq!(exclude_of(root.path()), ".codegraph/\n");
+        }
+        // Legacy entry in info/exclude only.
+        for existing in [".code-graph/\n", ".code-graph\n"] {
+            let root = repo();
+            std::fs::create_dir_all(root.path().join(".git/info")).unwrap();
+            std::fs::write(root.path().join(".git/info/exclude"), existing).unwrap();
+            ensure_code_graph_dir_ignored_unless(root.path(), false);
+            let got = exclude_of(root.path());
             assert!(
-                !root.path().join(".git/info/exclude").exists(),
-                "{existing:?} already ignores the legacy dir; nothing more to write"
+                got.lines()
+                    .any(|l| l.trim().trim_end_matches('/') == ".codegraph"),
+                "{existing:?} in exclude never ignored the new dir; got: {got:?}"
+            );
+            assert!(
+                got.lines()
+                    .any(|l| l.trim().trim_end_matches('/') == ".code-graph"),
+                "the legacy exclude line must be preserved; got: {got:?}"
             );
         }
     }
