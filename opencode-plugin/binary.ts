@@ -4,8 +4,8 @@
  * `resolveBin()`: `CODEGRAPH_BIN` env → PATH (`where` on win32 / `which`
  * otherwise, 2s timeout) → `<pluginRoot>/../bin/codegraph…` →
  * `~/.cache/code-graph/bin`. Version-gate skipped. Fail-open: `null` when
- * nothing usable is found. PATH probe inlines the no-popup literals (see
- * note below) to keep the import one-directional (spawn.ts → binary.ts).
+ * nothing usable is found. (No `hidden()` import here — see no-popup note
+ * below; direction is spawn.ts -> binary.ts only.)
  *
  * `resolveProjectRoot(cwd)`: walk up from `cwd` looking for
  * `.codegraph/index.db`, then the legacy fallback `.code-graph/index.db`,
@@ -14,9 +14,10 @@
  * + legacy fallback; NO worktree-main logic (the CLI owns that via
  * `effective_read_root`).
  *
- * No-popup rule: every child spawn in this file routes through `hidden()`
- * (`spawn.ts` — single choke point, port of `claude-plugin/scripts/proc-opts.js:38`):
- * `windowsHide: true, shell: false, stdio: pipe`; never `detached: true`,
+ * No-popup rule: the PATH probe below inlines the no-popup literals
+ * (`windowsHide: true, shell: false, stdio: pipe` — must match `hidden()`
+ * defaults in `spawn.ts`, noted at the call site) so the import stays
+ * one-directional (spawn.ts -> binary.ts); never `detached: true`,
  * `inherit`, or `cmd /c start`.
  */
 
@@ -25,7 +26,6 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { hidden } from "./spawn.ts";
 
 export const CODE_GRAPH_DIR = ".codegraph";
 export const LEGACY_CODE_GRAPH_DIR = ".code-graph";
@@ -51,7 +51,12 @@ function findOnPath(): string | null {
   try {
     const out = execFileSync(probe, ["codegraph"], {
       encoding: "utf8",
-      ...hidden({ stdio: "pipe", shell: false, timeout: 2000 }),
+      // No-popup literals must match hidden() defaults in spawn.ts (inlined
+      // here to keep the import one-directional: spawn.ts -> binary.ts).
+      stdio: "pipe",
+      shell: false,
+      windowsHide: true,
+      timeout: 2000,
     });
     const first = String(out).split(/\r?\n/, 1)[0]?.trim();
     return first && isFile(first) ? first : null;
