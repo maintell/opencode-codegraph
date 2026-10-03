@@ -75,7 +75,10 @@ fn snapshot_round_trip_node_counts_match() {
     let url = format!("file://{}", zst.display());
     snapshot::try_install(&url, target.path()).unwrap();
 
-    let installed = target.path().join(".code-graph").join("index.db");
+    let installed = target
+        .path()
+        .join(code_graph_mcp::domain::CODE_GRAPH_DIR)
+        .join("index.db");
     let raw = src.path().join("snapshot.db");
     assert_eq!(
         count_nodes(&installed),
@@ -104,7 +107,7 @@ fn snapshot_install_falls_back_on_corrupt_archive() {
         "got: {err}"
     );
 
-    let cg_dir = target.path().join(".code-graph");
+    let cg_dir = target.path().join(code_graph_mcp::domain::CODE_GRAPH_DIR);
     if cg_dir.exists() {
         for entry in std::fs::read_dir(&cg_dir).unwrap().flatten() {
             let s = entry.file_name().to_string_lossy().into_owned();
@@ -176,10 +179,13 @@ fn snapshot_install_concurrent_serialized_via_filesystem() {
         r1.is_ok() || r2.is_ok(),
         "at least one install should succeed"
     );
-    let installed = target.path().join(".code-graph").join("index.db");
+    let installed = target
+        .path()
+        .join(code_graph_mcp::domain::CODE_GRAPH_DIR)
+        .join("index.db");
     assert!(installed.exists());
 
-    for entry in std::fs::read_dir(target.path().join(".code-graph"))
+    for entry in std::fs::read_dir(target.path().join(code_graph_mcp::domain::CODE_GRAPH_DIR))
         .unwrap()
         .flatten()
     {
@@ -203,7 +209,10 @@ fn snapshot_then_incremental_picks_up_drift() {
     let url = format!("file://{}", zst.display());
     snapshot::try_install(&url, target.path()).unwrap();
 
-    let installed = target.path().join(".code-graph").join("index.db");
+    let installed = target
+        .path()
+        .join(code_graph_mcp::domain::CODE_GRAPH_DIR)
+        .join("index.db");
     let nodes_before = count_nodes(&installed);
 
     let db = Database::open_with_vec(&installed).unwrap();
