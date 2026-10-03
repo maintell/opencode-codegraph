@@ -102,7 +102,8 @@ let SRC_BARE_TOKEN;
 // conventional source dirs, but a Python package lives in a dir named after it
 // (`networkx/`, `django/`): in the 2026-09-28 coding eval not one grep of 15
 // runs reached this hook. The indexer writes the top-level dirs that hold
-// indexed code to `.code-graph/source-roots.json`, and those names join the
+// indexed code to `source-roots.json` beside the index (new `.codegraph/` dir
+// first, legacy `.code-graph/` fallback — mirrors `index_db_path`), and those names join the
 // list. A name must be one plain shell word (no quote, space, slash, leading
 // dot); past MAX_SOURCE_ROOTS the list alone applies, as it does when the file
 // is missing or unreadable.
@@ -113,13 +114,16 @@ const PREFIX_WORDS = new Set(SRC_PREFIXES.replace('components?', 'components|com
 
 function readSourceRoots(root) {
   if (!root) return [];
-  let parsed;
-  try {
-    parsed = JSON.parse(fs.readFileSync(path.join(root, '.code-graph', SOURCE_ROOTS_FILE), 'utf8'));
-  } catch { return []; }
-  const roots = parsed && Array.isArray(parsed.roots) ? parsed.roots : null;
-  if (!roots || roots.length > MAX_SOURCE_ROOTS) return [];
-  return roots.filter((r) => typeof r === 'string' && SOURCE_ROOT_NAME.test(r) && !PREFIX_WORDS.has(r));
+  for (const dir of ['.codegraph', '.code-graph']) {
+    let parsed;
+    try {
+      parsed = JSON.parse(fs.readFileSync(path.join(root, dir, SOURCE_ROOTS_FILE), 'utf8'));
+    } catch { continue; }
+    const roots = parsed && Array.isArray(parsed.roots) ? parsed.roots : null;
+    if (!roots || roots.length > MAX_SOURCE_ROOTS) return [];
+    return roots.filter((r) => typeof r === 'string' && SOURCE_ROOT_NAME.test(r) && !PREFIX_WORDS.has(r));
+  }
+  return [];
 }
 
 function useSourceRoots(roots) {

@@ -10,7 +10,7 @@
  * `@opencode/plugin` as a dependency.
  */
 
-import { buildGrepHint, buildSessionContext, capBytes } from "./hooks.ts";
+import { beforeHookText, buildGrepHint, buildSessionContext, capBytes } from "./hooks.ts";
 import { ensureColdStart, flushSoon, noteEdit } from "./queue.ts";
 import { runCodegraph } from "./spawn.ts";
 import { TOOL_DEFINITIONS, executeTool } from "./tools.ts";
@@ -59,17 +59,14 @@ export default Plugin.define({
     });
 
     // Hint-only: grep|rg-like bash input → prefer-codegraph hint as
-    // context text. read/edit input → none. Input NEVER mutated.
+    // context text. Bash gate: beforeHookText only returns text for
+    // bash-shaped events (tool==="bash", or a `command` string when the
+    // event carries no tool name); a codegraph tool input mentioning grep
+    // never reaches buildGrepHint. Input NEVER mutated.
     await ctx.tool.hook("execute.before", async (input: any) => {
       try {
-        const text =
-          typeof input?.command === "string"
-            ? input.command
-            : typeof input?.input === "string"
-              ? input.input
-              : typeof input === "string"
-                ? input
-                : "";
+        const text = beforeHookText(input);
+        if (text === null) return;
         const hint = buildGrepHint(text);
         if (hint) return { context: hint };
       } catch {

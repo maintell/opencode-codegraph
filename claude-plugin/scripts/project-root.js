@@ -126,7 +126,8 @@ function resolveProjectRoot(startDir, opts = {}) {
 }
 
 // True while the MCP server's startup index is still being written for `root`.
-// The server writes `.code-graph/indexing-status.json` ({s, d, t}) and heartbeats
+// The server writes `.codegraph/indexing-status.json` (legacy
+// `.code-graph/indexing-status.json` still read) ({s, d, t}) and heartbeats
 // it per batch and per finalize phase, then removes it. Until then the index is
 // partial, and a structural answer from it is wrong, not just short: 0.3 s into
 // a cold networkx build `impact edge_betweenness_centrality` said "0 callers,
@@ -137,14 +138,18 @@ const INDEXING_STALE_MS = 120000;
 
 function indexBuildInProgress(root, now = Date.now()) {
   if (!root) return false;
-  const file = path.join(root, '.code-graph', 'indexing-status.json');
-  try {
-    if (now - fs.statSync(file).mtimeMs >= INDEXING_STALE_MS) return false;
-    const p = JSON.parse(fs.readFileSync(file, 'utf8'));
-    return (p.s === 'indexing' || p.s === 'finalizing') && p.t > 0;
-  } catch {
-    return false;
+  // New dir first, legacy fallback (mirrors index_db_path read-routing).
+  for (const dir of ['.codegraph', '.code-graph']) {
+    const file = path.join(root, dir, 'indexing-status.json');
+    try {
+      if (now - fs.statSync(file).mtimeMs >= INDEXING_STALE_MS) continue;
+      const p = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if ((p.s === 'indexing' || p.s === 'finalizing') && p.t > 0) return true;
+    } catch {
+      // missing/unreadable here — try the next dir
+    }
   }
+  return false;
 }
 
 module.exports = { resolveProjectRoot, indexBuildInProgress, INDEXING_STALE_MS };

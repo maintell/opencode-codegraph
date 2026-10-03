@@ -76,10 +76,51 @@ test("runCodegraph(): success path returns {ok:true} and appends --json", () => 
 test("runCodegraph(): non-zero exit fail-opens to {ok:false}, never throws", () => {
   const prev = process.env.CODEGRAPH_BIN;
   process.env.CODEGRAPH_BIN = process.execPath;
+  // Truly textless failure: script file that exits non-zero with no output
+  // (proves textless failures keep stdout:""; `node -e … --json` would emit
+  // a stderr usage line, which failText now surfaces by design).
+  const script = path.join(os.tmpdir(), `cg-exit3-${process.pid}.js`);
+  fs.writeFileSync(script, "process.exit(3);");
   try {
-    const r = runCodegraph(["-e", "process.exit(3)"]);
+    const r = runCodegraph([script]);
     assert.deepStrictEqual(r, { ok: false, stdout: "" });
   } finally {
+    fs.rmSync(script, { force: true });
+    if (prev === undefined) delete process.env.CODEGRAPH_BIN;
+    else process.env.CODEGRAPH_BIN = prev;
+  }
+});
+
+test("runCodegraph(): stderr text survives failure as content (refusal-as-content)", () => {
+  // Failing command that prints to stderr: execFileSync errors carry
+  // .stdout/.stderr, which runCodegraph must surface so executeTool's
+  // substring gates (`database is locked`, `no_index`, Usage) see them.
+  const prev = process.env.CODEGRAPH_BIN;
+  process.env.CODEGRAPH_BIN = process.execPath;
+  const script = path.join(os.tmpdir(), `cg-failbin-${process.pid}.js`);
+  fs.writeFileSync(script, "process.stderr.write('database is locked'); process.exit(1);");
+  try {
+    const r = runCodegraph([script]);
+    assert.strictEqual(r.ok, false);
+    assert.match(r.stdout, /database is locked/);
+  } finally {
+    fs.rmSync(script, { force: true });
+    if (prev === undefined) delete process.env.CODEGRAPH_BIN;
+    else process.env.CODEGRAPH_BIN = prev;
+  }
+});
+
+test("runCodegraph(): failure text capped ~2000 chars", () => {
+  const prev = process.env.CODEGRAPH_BIN;
+  process.env.CODEGRAPH_BIN = process.execPath;
+  const script = path.join(os.tmpdir(), `cg-bigfail-${process.pid}.js`);
+  fs.writeFileSync(script, "process.stderr.write('x'.repeat(5000)); process.exit(1);");
+  try {
+    const r = runCodegraph([script]);
+    assert.strictEqual(r.ok, false);
+    assert.ok(r.stdout.length <= 2000, `expected <=2000, got ${r.stdout.length}`);
+  } finally {
+    fs.rmSync(script, { force: true });
     if (prev === undefined) delete process.env.CODEGRAPH_BIN;
     else process.env.CODEGRAPH_BIN = prev;
   }

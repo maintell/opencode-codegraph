@@ -452,13 +452,57 @@ export const TOOL_CLI_MAP: Record<string, (input: ToolInput) => string[]> = {
   find_references: refsArgs,
 };
 
-// `include_deps`/`include_dead` have NO CLI bare equivalent — the caller gets
-// the base overview plus this suffix instead of an invented flag.
-function overviewHint(input: ToolInput): string {
-  if (flag(input, "include_deps") || flag(input, "include_dead")) {
-    return "\n[codegraph hint: include_deps/include_dead have no CLI equivalent and were not applied — use the `deps` / `dead-code` CLI subcommands for those views]";
+// Props with NO CLI bare equivalent get an overviewHint-style suffix instead
+// of an invented flag (no schema change; spec §5 required arrays as-is):
+// - module_overview `include_deps`/`include_dead` → `deps` / `dead-code`
+// - find_references `include_tests` → nothing: `refs` has no --include-tests
+//   flag and ALWAYS includes test references (rollup called with
+//   skip_tests=false in `src/cli/commands/refs.rs`), so `false` in particular
+//   is silently not-a-filter without this note
+// - project_map `include_centrality`/`centrality_limit` → `centrality`
+// - `max_tokens` (callgraph/show/map/overview) → nothing passable: the CLI's
+//   `--budget` conflicts with `--json`, which this transport always appends
+function droppedHint(toolName: string, input: ToolInput): string {
+  const notes: string[] = [];
+  if (toolName === "module_overview" && (flag(input, "include_deps") || flag(input, "include_dead"))) {
+    notes.push(
+      "include_deps/include_dead have no CLI equivalent and were not applied — use the `deps` / `dead-code` CLI subcommands for those views",
+    );
   }
-  return "";
+  if (toolName === "find_references" && input["include_tests"] !== undefined) {
+    notes.push(
+      "include_tests has no CLI equivalent and was not applied — refs always includes test references",
+    );
+  }
+  if (
+    toolName === "project_map" &&
+    (flag(input, "include_centrality") || input["centrality_limit"] !== undefined)
+  ) {
+    notes.push(
+      "include_centrality/centrality_limit have no CLI equivalent and were not applied — use the `centrality` CLI subcommand for chokepoints",
+    );
+  }
+  if (
+    (toolName === "get_call_graph" ||
+      toolName === "get_ast_node" ||
+      toolName === "project_map" ||
+      toolName === "module_overview") &&
+    input["max_tokens"] !== undefined
+  ) {
+    notes.push(
+      "max_tokens has no CLI equivalent and was not applied (the CLI --budget flag conflicts with --json)",
+    );
+  }
+  if (
+    toolName === "get_ast_node" &&
+    (flag(input, "include_similar") || input["similar_top_k"] !== undefined)
+  ) {
+    notes.push(
+      "include_similar/similar_top_k have no CLI equivalent and were not applied — embedding-similar needs the MCP path",
+    );
+  }
+  if (notes.length === 0) return "";
+  return `\n[codegraph hint: ${notes.join("; ")}]`;
 }
 
 function unavailable(reason: string, hint: string): { content: string } {
@@ -479,7 +523,7 @@ export async function executeTool(
     if (!build) return unavailable("run-failed", `unknown tool '${toolName}'`);
     const argv = build(input ?? {});
     const r = runCodegraph(argv, signal);
-    if (r.ok) return { content: r.stdout + (toolName === "module_overview" ? overviewHint(input) : "") };
+    if (r.ok) return { content: r.stdout + droppedHint(toolName, input) };
     if (r.stdout) {
       const text = r.stdout;
       if (/database is locked/i.test(text)) return unavailable("locked", text);

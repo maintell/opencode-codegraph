@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { buildGrepHint, buildSessionContext, capBytes } = require("./hooks.ts");
+const { buildGrepHint, beforeHookText, buildSessionContext, capBytes } = require("./hooks.ts");
 
 test("buildGrepHint: grep-like command returns prefer-codegraph string <=200 chars", () => {
   const h = buildGrepHint("grep -rn foo");
@@ -21,6 +21,26 @@ test("buildGrepHint: non-search command returns null", () => {
 test("buildGrepHint: read/edit-shaped input returns null (no hint spam)", () => {
   assert.strictEqual(buildGrepHint("read src/foo.ts"), null);
   assert.strictEqual(buildGrepHint("edit src/foo.ts"), null);
+});
+
+test("beforeHookText: named non-bash tool never hints (no over-hint)", () => {
+  // A codegraph tool input that merely mentions grep must not hint.
+  assert.strictEqual(
+    beforeHookText({ tool: "codegraph_semantic_code_search", input: { query: "grep foo" } }),
+    null,
+  );
+  assert.strictEqual(beforeHookText({ tool: "edit", input: { command: "grep -rn foo" } }), null);
+});
+
+test("beforeHookText: bash tool / command field passes text through", () => {
+  assert.strictEqual(beforeHookText({ tool: "bash", input: { command: "grep -rn foo" } }), "grep -rn foo");
+  assert.strictEqual(beforeHookText({ tool: "bash", input: "rg 'x' src/" }), "rg 'x' src/");
+  // Documented before-event has no tool name: only a `command` string proves
+  // bash shape. A bare `input` string / raw string without a tool name is
+  // gated out (could be any tool's input).
+  assert.strictEqual(beforeHookText({ command: "grep -rn foo" }), "grep -rn foo");
+  assert.strictEqual(beforeHookText({ input: "grep -rn foo" }), null);
+  assert.strictEqual(beforeHookText("grep -rn foo"), null);
 });
 
 test("capBytes: short input untouched", () => {

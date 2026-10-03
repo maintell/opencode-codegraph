@@ -5,7 +5,7 @@
  * (edit/write/patch) hook in `index.ts`: hooks queue file paths only and
  * never spawn. `flushSoon()` debounces (3s prod) then runs one
  * `incremental-index --quiet --no-embed` via `runCodegraph` when the queue
- * is non-empty; lock-caused `ok:false` is a silent no-op (next idle
+ * is non-empty; `ok:false`/throw re-queues the drained files (next idle
  * retries). `ensureColdStart()` runs the once-per-session `health-check` /
  * `reindex --from-snapshot` cold path. All fail-open: never throws.
  *
@@ -73,7 +73,9 @@ export function flushSoon(
 }
 
 // Immediate flush: drains the queue; non-empty → one incremental-index.
-// Lock-caused `ok:false` → silent no-op (next idle retries). Never throws.
+// `ok:false` or throw → re-queue the drained files (via noteEdit, so the
+// MAX_PENDING cap still applies) so the next idle retries. Empty queue →
+// 0 runs. Never throws.
 export function flushNow(run: (args: string[]) => RunResult = runCodegraph): void {
   let files: string[];
   try {
@@ -82,10 +84,16 @@ export function flushNow(run: (args: string[]) => RunResult = runCodegraph): voi
     return;
   }
   if (files.length === 0) return;
+  let ok = false;
   try {
-    run(["incremental-index", "--quiet", "--no-embed"]);
+    ok = run(["incremental-index", "--quiet", "--no-embed"])?.ok === true;
   } catch {
-    // silent no-op
+    ok = false;
+  }
+  if (!ok) {
+    // Re-queue drained files in original order so the retry sees the same
+    // FIFO (via noteEdit so the MAX_PENDING cap still applies).
+    for (const f of files) noteEdit(f);
   }
 }
 

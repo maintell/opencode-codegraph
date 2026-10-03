@@ -74,6 +74,18 @@ test("argv: show maps include_references/include_impact to --refs/--impact", () 
   assert.ok(argv.includes("--refs") && argv.includes("--impact"), argv.join(" "));
 });
 
+test("argv: no invented flags for hinted props (refs include_tests, show max_tokens, refs max_tokens?)", () => {
+  // refs has no --include-tests CLI flag; max_tokens never becomes --budget
+  // (--budget conflicts with the always-appended --json).
+  const refs = TOOL_CLI_MAP.find_references({ symbol_name: "f", include_tests: false });
+  assert.ok(!refs.some((a) => a.startsWith("--include-tests")), refs.join(" "));
+  assert.ok(!refs.some((a) => a.startsWith("--budget")), refs.join(" "));
+  const show = TOOL_CLI_MAP.get_ast_node({ symbol_name: "f", max_tokens: 500 });
+  assert.ok(!show.some((a) => a.startsWith("--budget") || a.startsWith("--max-tokens")), show.join(" "));
+  const map = TOOL_CLI_MAP.project_map({ include_centrality: true, centrality_limit: 5 });
+  assert.ok(!map.some((a) => a.startsWith("--centrality") || a.startsWith("--budget")), map.join(" "));
+});
+
 test("argv: trace mode --no-middleware only when include_middleware===false", () => {
   const on = TOOL_CLI_MAP.get_call_graph({ route_path: "GET /x" });
   assert.ok(!on.includes("--no-middleware"), on.join(" "));
@@ -126,8 +138,7 @@ test("executeTool(): module_overview hint path (patched argv probe)", async () =
   }
 });
 
-test("executeTool(): missing binary fail-opens, never throws", async () => {
-  const prevBin = process.env.CODEGRAPH_BIN;
+test("executeTool(): missing binary fail-opens, never throws", async () => {  const prevBin = process.env.CODEGRAPH_BIN;
   const prevPath = process.env.PATH;
   process.env.CODEGRAPH_BIN = path.join(os.tmpdir(), "codegraph-missing-bin-xyz");
   process.env.PATH = os.tmpdir();

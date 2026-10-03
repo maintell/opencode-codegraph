@@ -28,6 +28,31 @@ export function buildGrepHint(input: unknown): string | null {
   }
 }
 
+// Tool-name gate for the `execute.before` hook (mirrors the after-hook's
+// `output?.tool` read): a NAMED non-bash tool never hints, so a codegraph
+// tool input that merely mentions "grep" cannot over-hint. The documented
+// before-event carries no tool name — when the field is absent, only a
+// `command` string field proves bash shape (a bare `input` string / raw
+// string alone could be any tool's, so those are gated out). Returns the
+// command text to hint on, or null when gated out. Input NEVER mutated.
+export function beforeHookText(ev: unknown): string | null {
+  try {
+    if (typeof ev !== "object" || ev === null) return null;
+    const rec = ev as Record<string, unknown>;
+    if (typeof rec.tool === "string" && rec.tool !== "bash") return null;
+    const named = typeof rec.tool === "string";
+    const body = rec.input ?? ev;
+    if (typeof body === "string") return named ? body : null;
+    if (typeof body !== "object" || body === null) return null;
+    const b = body as Record<string, unknown>;
+    if (typeof b.command === "string") return b.command;
+    if (named && typeof b.input === "string") return b.input;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 const TRUNC_SUFFIX = "…(truncated, run map --compact)";
 
 export function capBytes(s: string, n: number): string {
