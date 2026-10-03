@@ -678,6 +678,20 @@ cargo check
 cargo bench --no-default-features
 ```
 
+## opencode plugin (v2)
+
+A native [opencode](https://opencode.ai) v2 plugin lives in `opencode-plugin/`:
+auto-indexing hooks (edit → queue → `session.idle` flush) plus the same 7 tools
+under the `codegraph` namespace. Minimal setup (see `opencode.jsonc.example`):
+
+```json
+{ "plugins": ["./opencode-plugin"] }
+```
+
+Set `CODEGRAPH_BIN=/path/to/target/release/code-graph-mcp` if the CLI is not on
+`PATH`. Full install, tool table, and verification checklist:
+[`opencode-plugin/README.md`](opencode-plugin/README.md).
+
 ## License
 
 See [LICENSE](LICENSE) for details.
