@@ -55,6 +55,7 @@ export function buildSessionContext(run: CtxRunner): string {
   try {
     const r = run(["map", "--compact"]);
     if (!r || !r.ok || !r.stdout) return "";
+    if (/no_index/i.test(r.stdout)) return "";
     return capBytes(r.stdout, 4000);
   } catch {
     return "";

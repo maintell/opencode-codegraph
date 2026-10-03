@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { buildGrepHint, capBytes } = require("./hooks.ts");
+const { buildGrepHint, buildSessionContext, capBytes } = require("./hooks.ts");
 
 test("buildGrepHint: grep-like command returns prefer-codegraph string <=200 chars", () => {
   const h = buildGrepHint("grep -rn foo");
@@ -32,6 +32,14 @@ test("capBytes: long input truncated with suffix", () => {
   const out = capBytes(s, 4000);
   assert.ok(Buffer.byteLength(out, "utf8") <= 4000 + 100, `too long: ${Buffer.byteLength(out, "utf8")}`);
   assert.match(out, /truncated/);
+});
+
+test("buildSessionContext: ok:true with no_index stdout -> silent empty", () => {
+  const out = buildSessionContext(() => ({
+    ok: true,
+    stdout: '{"healthy":false,"reason":"no_index"}',
+  }));
+  assert.strictEqual(out, "");
 });
 
 test("flushSoon: 3 rapid calls -> 1 run (debounce)", async (t) => {

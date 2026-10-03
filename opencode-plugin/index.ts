@@ -36,13 +36,17 @@ export default Plugin.define({
   async setup(ctx: any) {
     const c = new AbortController();
 
-    // Warm queue: cold-start once (health-check / snapshot / full), then
-    // the after-hook keeps queueing edits for idle flushes.
-    try {
-      ensureColdStart();
-    } catch {
-      // silent
-    }
+    // Warm queue: cold-start once (health-check / snapshot / full) in the
+    // background so setup() returns immediately (execFileSync blocks up to
+    // 2x15s worst case). Fire-and-forget, fail-open: never throws.
+    void (async () => {
+      await null; // yield first: setup() keeps running/returns, cold start resumes next microtask
+      try {
+        ensureColdStart();
+      } catch {
+        // silent
+      }
+    })();
 
     await ctx.tool.hook("execute.after", async (output: any) => {
       try {
