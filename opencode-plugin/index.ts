@@ -1,14 +1,18 @@
 /**
- * index.ts — opencode v2 plugin entry (scaffold for Task 4; tools wired by Task 3).
+ * index.ts — opencode v2 plugin entry (Task 4: all 4 hooks wired).
  *
  * Ruling 3 note: `@opencode/plugin` is NOT installed in this repo, so the
  * hook/API names below are written against the documented API (`Plugin.define`,
- * `ctx.tool.hook("execute.after", …)`, `ctx.tool.transform(editor => editor.add(…))`,
- * `ctx.event.subscribe({signal})`) and are unverified against the real types
- * until build time. Do NOT add `@opencode/plugin` as a dependency.
+ * `ctx.tool.hook("execute.after"/"execute.before", …)`,
+ * `ctx.tool.transform(editor => editor.add(…))`,
+ * `ctx.event.subscribe({signal})`, `ctx.session.hook("context", …)`) and are
+ * unverified against the real types until build time. Do NOT add
+ * `@opencode/plugin` as a dependency.
  */
 
-import { flushSoon, noteEdit } from "./queue.ts";
+import { buildGrepHint, buildSessionContext, capBytes } from "./hooks.ts";
+import { ensureColdStart, flushSoon, noteEdit } from "./queue.ts";
+import { runCodegraph } from "./spawn.ts";
 import { TOOL_DEFINITIONS, executeTool } from "./tools.ts";
 
 const EDIT_TOOLS = new Set(["edit", "write", "patch"]);
@@ -32,10 +36,41 @@ export default Plugin.define({
   async setup(ctx: any) {
     const c = new AbortController();
 
+    // Warm queue: cold-start once (health-check / snapshot / full), then
+    // the after-hook keeps queueing edits for idle flushes.
+    try {
+      ensureColdStart();
+    } catch {
+      // silent
+    }
+
     await ctx.tool.hook("execute.after", async (output: any) => {
-      if (!EDIT_TOOLS.has(output?.tool)) return;
-      for (const f of editedPaths(output)) noteEdit(f);
-      // Queues only, logs nothing.
+      try {
+        if (!EDIT_TOOLS.has(output?.tool)) return;
+        for (const f of editedPaths(output)) noteEdit(f);
+        // Queues only, logs nothing. No spawn.
+      } catch {
+        // Fail-open: queue errors never throw into the host.
+      }
+    });
+
+    // Hint-only: grep|rg-like bash input → prefer-codegraph hint as
+    // context text. read/edit input → none. Input NEVER mutated.
+    await ctx.tool.hook("execute.before", async (input: any) => {
+      try {
+        const text =
+          typeof input?.command === "string"
+            ? input.command
+            : typeof input?.input === "string"
+              ? input.input
+              : typeof input === "string"
+                ? input
+                : "";
+        const hint = buildGrepHint(text);
+        if (hint) return { context: hint };
+      } catch {
+        // silent
+      }
     });
 
     // 7 live model tools (spec §5). One editor.add per tool, all under the
@@ -59,13 +94,36 @@ export default Plugin.define({
       return editor;
     });
 
-    // Idle-subscribe loop stub: Task 4 replaces the body with debounce flush.
-    const sub: unknown =
-      typeof ctx.event?.subscribe === "function"
-        ? ctx.event.subscribe({ signal: c.signal })
-        : null;
-    void sub;
-    flushSoon();
+    // Session start: cold `map --compact` injection capped at 4000 bytes;
+    // `no_index`/binary-missing → append nothing (silent).
+    if (typeof ctx.session?.hook === "function") {
+      await ctx.session.hook("context", async () => {
+        try {
+          const text = buildSessionContext((args) => runCodegraph(args, c.signal));
+          return text ? { context: capBytes(text, 4000) } : undefined;
+        } catch {
+          return undefined;
+        }
+      });
+    }
+
+    // Idle loop: every `session.idle` event → debounced flush (Task 4
+    // rewire of the Task 2 stub; fire-and-forget, host aborts on cleanup).
+    if (typeof ctx.event?.subscribe === "function") {
+      void (async () => {
+        try {
+          for await (const ev of ctx.event.subscribe({ signal: c.signal })) {
+            try {
+              if ((ev as any)?.type === "session.idle") flushSoon();
+            } catch {
+              // silent; next idle retries
+            }
+          }
+        } catch {
+          // subscribe abort/close: silent
+        }
+      })();
+    }
 
     return () => c.abort();
   },
