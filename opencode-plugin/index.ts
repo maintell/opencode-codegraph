@@ -79,18 +79,13 @@ export default Plugin.define({
     await ctx.tool.transform((editor: any) => {
       for (const def of TOOL_DEFINITIONS) {
         const name = def.name;
-        editor.add(
-          {
-            name,
-            description: def.description,
-            input_schema: def.input_schema,
-          },
-          {
-            namespace: "codegraph",
-            codemode: false,
-            execute: (input: any, toolCtx: any) => executeTool(name, input, toolCtx?.signal),
-          },
-        );
+        editor.add({
+          name,
+          description: def.description,
+          input: def.input_schema,
+          options: { namespace: "codegraph", codemode: false },
+          execute: (input: any, toolCtx: any) => executeTool(name, input, toolCtx?.signal),
+        });
       }
       return editor;
     });
