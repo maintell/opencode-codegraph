@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.165.0
+
+opencode v2 in-process plugin (replaces the MCP stdio server path for
+opencode users) + per-project `.codegraph/` data dir (legacy `.code-graph/`
+read-compatible, auto-migrated on first write). The plugin registers 7 model
+tools (`semantic_code_search`, `get_call_graph`, `get_ast_node`,
+`project_map`, `module_overview`, `ast_search`, `find_references`) backed by
+short-lived CLI calls — no resident daemon, no timers (edit → queue →
+`session.idle` flush), no popup windows. Snapshot install + incremental
+catch-up preserved. Pin in `opencode.jsonc` with
+`github:maintell/opencode-codegraph#v0.165.0::path:opencode-plugin`.
+
 ## 0.164.0
 
 Most of this release comes from a 2026-09-28 evaluation of the plugin inside

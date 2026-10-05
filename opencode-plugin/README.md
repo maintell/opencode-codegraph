@@ -23,6 +23,12 @@ cp -r opencode-plugin <project>/.opencode/plugins/codegraph
 { "plugins": ["./opencode-plugin"] }
 ```
 
+**D. Pinned release (reproducible):** reference the published tag:
+
+```json
+{ "plugins": ["github:maintell/opencode-codegraph#v0.165.0::path:opencode-plugin"] }
+```
+
 See `opencode.jsonc.example` (repo root) for the minimal config.
 
 ## Binary resolution (`CODEGRAPH_BIN`)
