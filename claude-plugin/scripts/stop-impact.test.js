@@ -443,7 +443,11 @@ test('e2e: signature change with an untouched caller → exactly one b.rs:line, 
 // in recommendations.jsonl.
 function stopRecords(sb) {
   let raw = '';
-  try { raw = fs.readFileSync(path.join(sb.repo, '.code-graph', 'recommendations.jsonl'), 'utf8'); } catch { /* none */ }
+  // New `.codegraph/` first, legacy `.code-graph/` fallback — matches where
+  // recommendation-log.js writes after the data-dir rename.
+  for (const dir of ['.codegraph', '.code-graph']) {
+    try { raw = fs.readFileSync(path.join(sb.repo, dir, 'recommendations.jsonl'), 'utf8'); break; } catch { /* next */ }
+  }
   return raw.split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.hook === 'stop');
 }
 

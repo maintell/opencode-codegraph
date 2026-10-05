@@ -9,15 +9,15 @@
 // routing_bench oracle can't see (memory: self-dogfood-blindspot / feedback_routing_bench).
 //
 // Bounded + best-effort by construction:
-//   - appends to <cwd>/.code-graph/recommendations.jsonl and NEVER creates the
-//     `.code-graph` dir — so a non-project / tmp cwd (no index) leaves zero
-//     footprint, mirroring each hook's existing `.code-graph/index.db` guard.
+//   - appends to <cwd>/.codegraph/recommendations.jsonl (legacy .code-graph/
+//     fallback) and NEVER creates the data dir — so a non-project / tmp cwd (no
+//     index) leaves zero footprint, mirroring each hook's index-dir guard.
 //   - swallows every error: telemetry must never break or delay a tool call.
 const fs = require('fs');
 const path = require('path');
 
 const REC_FILE = 'recommendations.jsonl';
-// Opt-in per-project metrics-silence sentinel (under .code-graph/). Mirror of the
+// Opt-in per-project metrics-silence sentinel (under the data dir). Mirror of the
 // Rust `domain::NO_METRICS_SENTINEL` — keep the literal in sync.
 const NO_METRICS_FILE = '.no-metrics';
 
@@ -157,26 +157,42 @@ function rotateIfNeeded(file) {
 }
 
 /**
- * Append one recommendation event to <cwd>/.code-graph/recommendations.jsonl.
+ * Append one recommendation event to <cwd>/.codegraph/recommendations.jsonl
+ * (legacy <cwd>/.code-graph/recommendations.jsonl when that is the indexed dir).
  * @param {string} cwd        project root (the hook's process.cwd())
  * @param {object} event      e.g. { hook: 'grep', action: 'deny' }
  * @returns {boolean} true if a line was written
  */
 function recordRecommendation(cwd, event = {}) {
   try {
-    const dir = path.join(cwd, '.code-graph');
-    // Append-only: do NOT create .code-graph. Its absence means "not an indexed
-    // project" — recording there would pollute non-project cwds. `lstat`, not
-    // `existsSync`: a symlinked `.code-graph` holding perfectly ordinary files
-    // defeats the per-file guard below, because the write then lands on a real
-    // regular file that simply is not where this hook thinks it is.
-    let dirStat;
-    try {
-      dirStat = fs.lstatSync(dir);
-    } catch {
-      return false; // absent → not an indexed project
+    // New `.codegraph/` first, legacy `.code-graph/` fallback — the exact
+    // read-routing Rust's `index_db_path` applies, and why both spellings are
+    // tried: a pre-rename project still has only `.code-graph/`, so hardcoding
+    // either one silently drops the metrics of the other. The rename that moved
+    // the writer to `.codegraph/` left THIS module pinned to the legacy name, so
+    // on a freshly-indexed project the directory guard below found no
+    // `.code-graph/`, returned false, and every Stop/adoption record vanished
+    // (the CI `stop-impact` e2e caught it; Windows skips those tests, which is
+    // why it stayed green locally). Append-only: do NOT create either dir — its
+    // absence means "not an indexed project", recording there would pollute
+    // non-project cwds. `lstat`, not `existsSync`: a symlinked data dir holding
+    // perfectly ordinary files defeats the per-file guard below, because the
+    // write then lands on a real regular file that simply is not where this hook
+    // thinks it is.
+    let dir = null;
+    for (const name of ['.codegraph', '.code-graph']) {
+      const candidate = path.join(cwd, name);
+      let stat;
+      try {
+        stat = fs.lstatSync(candidate);
+      } catch {
+        continue; // absent (or unreadable) → try the next spelling
+      }
+      if (!isOwnedPath(candidate, 'dir', stat)) continue;
+      dir = candidate;
+      break;
     }
-    if (!isOwnedPath(dir, 'dir', dirStat)) return false;
+    if (dir === null) return false; // neither exists → not an indexed project
     // Opt-in metrics silence for dev/dogfood checkouts: when the project marks
     // itself with `.code-graph/.no-metrics`, the tool's own hook/CLI runs (sims,
     // functionality testing) must not self-pollute its adoption metrics. Mirrors

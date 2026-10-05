@@ -25,6 +25,22 @@ test('recordRecommendation appends a JSON line with ts + fields', (t) => {
   assert.ok(typeof rec.ts === 'string' && rec.ts.length > 0, 'ts should be a timestamp');
 });
 
+test('recordRecommendation writes to the new .codegraph dir (legacy fallback for .code-graph)', (t) => {
+  // The data dir was renamed `.code-graph` → `.codegraph` (Task 1, bd593250). The
+  // production writer and Rust usage.rs both use `.codegraph` now; hardcoding the
+  // legacy name here silently dropped every record on a freshly-indexed project
+  // (the CI stop-impact e2e caught it; Windows skips that e2e, so this unit test
+  // pins the routing on every OS). New dir wins when present.
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'cg-rec-new-'));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(cwd, '.codegraph'));
+  assert.equal(recordRecommendation(cwd, { hook: 'stop', action: 'stop_check' }), true);
+  const content = fs.readFileSync(path.join(cwd, '.codegraph', REC_FILE), 'utf8');
+  assert.equal(JSON.parse(content.trim()).action, 'stop_check');
+  // …and the legacy dir was NOT touched/created.
+  assert.equal(fs.existsSync(path.join(cwd, '.code-graph')), false);
+});
+
 test('recordRecommendation is a no-op (no dir created) when .code-graph absent', (t) => {
   const cwd = tmpProject(t, false);
   assert.equal(recordRecommendation(cwd, { hook: 'grep', action: 'hint' }), false);
