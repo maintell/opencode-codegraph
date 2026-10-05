@@ -77,3 +77,82 @@ test("execute: callable, returns {content: string} (missing binary fail-open)", 
     process.env.PATH = prevPath;
   }
 });
+
+async function captureHooks() {
+  const hooks = {};
+  const fakeCtx = {
+    tool: {
+      hook: async (name, cb) => {
+        hooks[name] = cb;
+      },
+      transform: async () => {},
+    },
+    session: {
+      hook: async (name, cb) => {
+        hooks[`session:${name}`] = cb;
+      },
+    },
+    event: {
+      subscribe: async function* () {},
+    },
+  };
+  await plugin.default.setup(fakeCtx);
+  return hooks;
+}
+
+test("after: single-event shape — reads event.input.filePath, queues edit", async () => {
+  const { takePending, __testReset } = require("./queue.ts");
+  __testReset();
+  takePending();
+  const hooks = await captureHooks();
+  const r = await hooks["execute.after"]({ tool: "edit", input: { filePath: "a.ts" }, status: "completed" });
+  assert.strictEqual(r, undefined, "host drops return values: after must return void");
+  assert.deepStrictEqual(takePending(), ["a.ts"]);
+  __testReset();
+});
+
+test("after: event.input.path alias queues; non-edit tool ignored", async () => {
+  const { takePending, __testReset } = require("./queue.ts");
+  __testReset();
+  takePending();
+  const hooks = await captureHooks();
+  await hooks["execute.after"]({ tool: "write", input: { path: "b.ts" }, status: "completed" });
+  assert.deepStrictEqual(takePending(), ["b.ts"]);
+  await hooks["execute.after"]({ tool: "read", input: { filePath: "c.ts" }, status: "completed" });
+  assert.deepStrictEqual(takePending(), []);
+  __testReset();
+});
+
+test("before: returns void and mutates bash command input in place", async () => {
+  const hooks = await captureHooks();
+  const ev = { tool: "bash", input: { command: "grep -rn foo" } };
+  const r = await hooks["execute.before"](ev);
+  assert.strictEqual(r, undefined, "host drops return values: before must return void");
+  assert.match(ev.input.command, /codegraph/i, "hint appended to command in place");
+});
+
+test("before: named non-bash tool input untouched, still void", async () => {
+  const hooks = await captureHooks();
+  const ev = { tool: "edit", input: { filePath: "grep.ts" } };
+  const r = await hooks["execute.before"](ev);
+  assert.strictEqual(r, undefined);
+  assert.deepStrictEqual(ev.input, { filePath: "grep.ts" });
+});
+
+test("context: returns void; missing binary -> silent, system untouched", async () => {
+  const hooks = await captureHooks();
+  const prevBin = process.env.CODEGRAPH_BIN;
+  const prevPath = process.env.PATH;
+  process.env.CODEGRAPH_BIN = path.join(os.tmpdir(), "codegraph-missing-bin-xyz");
+  process.env.PATH = os.tmpdir();
+  try {
+    const ev = { system: [] };
+    const r = await hooks["session:context"](ev);
+    assert.strictEqual(r, undefined, "host drops return values: context must return void");
+    assert.deepStrictEqual(ev.system, [], "no_index/missing binary -> silent");
+  } finally {
+    if (prevBin === undefined) delete process.env.CODEGRAPH_BIN;
+    else process.env.CODEGRAPH_BIN = prevBin;
+    process.env.PATH = prevPath;
+  }
+});
